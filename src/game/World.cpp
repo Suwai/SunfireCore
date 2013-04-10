@@ -47,6 +47,7 @@
 #include "CreatureEventAIMgr.h"
 #include "ScriptMgr.h"
 #include "ProgressBar.h"
+#include "WardenDataStorage.h"
 
 INSTANTIATE_SINGLETON_1(World);
 
@@ -1089,6 +1090,13 @@ void World::LoadConfigSettings(bool reload)
     m_configs[CONFIG_CHATLOG_PUBLIC] = sConfig.GetBoolDefault("ChatLogs.Public", false);
     m_configs[CONFIG_CHATLOG_ADDON] = sConfig.GetBoolDefault("ChatLogs.Addon", false);
     m_configs[CONFIG_CHATLOG_BGROUND] = sConfig.GetBoolDefault("ChatLogs.BattleGround", false);
+    // warden
+    m_configs[CONFIG_WARDEN_ENABLED] = sConfig.GetBoolDefault("Warden.Enabled", true);
+    m_configs[CONFIG_WARDEN_ACTION] = sConfig.GetIntDefault("Warden.Action", 1);
+    m_configs[CONFIG_WARDEN_BAN_DURATION] = sConfig.GetIntDefault("Warden.BanDuration", 86400);
+    m_configs[CONFIG_WARDEN_NUM_CHECKS] = sConfig.GetIntDefault("Warden.NumChecks", 3);
+    m_configs[CONFIG_WARDEN_CLIENT_RESPONSE_DELAY] = sConfig.GetIntDefault("Warden.ClientResponseDelay", 600);	
+    m_configs[CONFIG_WARDEN_CLIENT_CHECK_HOLDOFF] = sConfig.GetIntDefault("Warden.ClientCheckHoldOff", 5);
     // PvP Ranks
     m_configs[CONFIG_FLOAT_RATE_PVP_RANK_EXTRA_HONOR] = sConfig.GetIntDefault("PvPSystem.Rank.Rate.ExtraHonor", 1);
     std::string s_pvp_ranks = sConfig.GetStringDefault("PvPSystem.Rank.HKPerRank", "10,50,100,200,450,750,1300,2000,3500,6000,9500,15000,21000,30000");
@@ -1493,6 +1501,10 @@ void World::SetInitialWorldSettings()
     sLog.outString("Starting Game Event system...");
     uint32 nextGameEvent = gameeventmgr.Initialize();
     m_timers[WUPDATE_EVENTS].SetInterval(nextGameEvent);    //depend on next event
+
+    // Load Warden Data
+    sLog.outString("Loading Warden Data..." );
+    WardenDataStorage.Init();
 
     // Initialize Battlegrounds
     sLog.outString("Starting BattleGround System");

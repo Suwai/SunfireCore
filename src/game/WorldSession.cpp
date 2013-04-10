@@ -21,6 +21,8 @@
 #include "Chat.h"
 #include "SocialMgr.h"
 #include "ScriptMgr.h"
+#include "WardenWin.h"
+#include "WardenMac.h"
 
 // WorldSession constructor
 WorldSession::WorldSession(uint32 id, WorldSocket *sock, uint32 sec, uint8 expansion, time_t mute_time, LocaleConstant locale) :
@@ -28,7 +30,7 @@ LookingForGroup_auto_join(false), LookingForGroup_auto_add(false), m_muteTime(mu
 _player(NULL), m_Socket(sock),_security(sec), _accountId(id), m_expansion(expansion),
 m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(objmgr.GetIndexForLocale(locale)),
 _logoutTime(0), m_inQueue(false), m_playerLoading(false), m_playerLogout(false), m_playerRecentlyLogout(false), m_playerSave(false),
-m_latency(0), m_timeOutTime(0)
+m_latency(0), m_timeOutTime(0), m_Warden(NULL)
 {
     if (sock)
     {
@@ -53,6 +55,9 @@ WorldSession::~WorldSession()
         m_Socket->RemoveReference();
         m_Socket = NULL;
     }
+
+    if (m_Warden)
+        delete m_Warden;
 
     // empty incoming packet queue
     WorldPacket* packet;
@@ -234,6 +239,9 @@ bool WorldSession::Update(uint32 diff)
         delete packet;
     }
     
+    if (m_Socket && !m_Socket->IsClosed() && m_Warden)
+        m_Warden->Update();
+
     ///- If necessary, log the player out
     time_t currTime = time(NULL);
     if (ShouldLogOut(currTime) && !m_playerLoading)
@@ -532,6 +540,16 @@ void WorldSession::SendAuthWaitQue(uint32 position)
         packet << uint32(position);
         SendPacket(&packet);
     }
+}
+
+void WorldSession::InitWarden(BigNumber *K, std::string os)
+{
+    if (os == "Win")                                        // Windows
+        m_Warden = (WardenBase*)new WardenWin();
+    else                                                    // MacOS
+        m_Warden = (WardenBase*)new WardenMac();
+
+    m_Warden->Init(this, K);
 }
 
 void WorldSession::ExecuteOpcode(OpcodeHandler const& opHandle, WorldPacket* packet)

@@ -16,7 +16,7 @@ INSTANTIATE_SINGLETON_1(Log);
 Log::Log() :
     raLogfile(NULL), logfile(NULL), gmLogfile(NULL), charLogfile(NULL),
     dberLogfile(NULL), chatLogfile(NULL), arenaLogFile(NULL), m_gmlog_per_account(false),
-    m_enableLogDBLater(false), m_enableLogDB(false), m_colored(false)
+    m_enableLogDBLater(false), m_enableLogDB(false), m_colored(false), wardenLogFile(NULL)
 {
     Initialize();
 }
@@ -50,6 +50,10 @@ Log::~Log()
     if (arenaLogFile != NULL)
         fclose(arenaLogFile);
     arenaLogFile = NULL;
+
+    if (wardenLogFile != NULL)
+        fclose(wardenLogFile);
+    wardenLogFile = NULL;
 }
 
 void Log::SetLogLevel(char *Level)
@@ -141,6 +145,7 @@ void Log::Initialize()
     raLogfile = openLogFile("RaLogFile",NULL,"a");
     chatLogfile = openLogFile("ChatLogFile","ChatLogTimestamp","a");
     arenaLogFile = openLogFile("ArenaLogFile",NULL,"a");
+    wardenLogFile = openLogFile("Warden.LogFile",NULL,"a");
 
     // Main log file settings
     m_logLevel     = sConfig.GetIntDefault("LogLevel", LOGL_NORMAL);
@@ -905,3 +910,26 @@ void Log::outChat(const char * str, ...)
     fflush(stdout);
 }
 
+void Log::outWarden(const char * str, ...)
+{
+    if(!str)
+        return;
+
+    UTF8PRINTF(stdout,str,);
+
+    printf("\n");
+    if (wardenLogFile)
+    {
+        outTimestamp(wardenLogFile);
+        fprintf(wardenLogFile, "WARDEN: ");
+
+        va_list ap;
+        va_start(ap, str);
+        vfprintf(wardenLogFile, str, ap);
+        fprintf(wardenLogFile, "\n");
+        va_end(ap);
+
+        fflush(wardenLogFile);
+    }
+    fflush(stdout);
+}

@@ -94,6 +94,7 @@ class Log : public BlizzLike::Singleton<Log, BlizzLike::ClassLevelLockable<Log, 
         void outCommand( uint32 account, const char * str, ...) ATTR_PRINTF(3,4);
         void outRemote( const char * str, ... )                 ATTR_PRINTF(2,3);
         void outChat( const char * str, ... )                   ATTR_PRINTF(2,3);
+        void outWarden( const char * str, ... )                 ATTR_PRINTF(2,3);
         void outArena( const char * str, ... )                  ATTR_PRINTF(2,3);
         void outCharDump( const char * str, uint32 account_id, uint32 guid, const char * name );
 
@@ -124,6 +125,7 @@ class Log : public BlizzLike::Singleton<Log, BlizzLike::ClassLevelLockable<Log, 
         FILE* dberLogfile;
         FILE* chatLogfile;
         FILE* arenaLogFile;
+        FILE* wardenLogFile;
 
         // cache values for after initilization use (like gm log per account case)
         std::string m_logsDir;
