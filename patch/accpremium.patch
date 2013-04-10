@@ -1,0 +1,303 @@
+diff --git a/sql/accpremium/auth_accpremium.sql b/sql/accpremium/auth_accpremium.sql
+new file mode 100644
+index 0000000..df317ed
+--- /dev/null
++++ b/sql/accpremium/auth_accpremium.sql
+@@ -0,0 +1,8 @@
++CREATE TABLE IF NOT EXISTS `account_premium` (
++  `id` int(11) NOT NULL default '0' COMMENT 'Account id',
++  `setdate` bigint(40) NOT NULL default '0',
++  `unsetdate` bigint(40) NOT NULL default '0',
++  `premium_type` tinyint(4) unsigned NOT NULL default '1',
++  `active` tinyint(4) NOT NULL default '1',
++  PRIMARY KEY  (`id`,`setdate`)
++) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='Premium Accounts';
+\ No newline at end of file
+diff --git a/sql/accpremium/world_accpremium.sql b/sql/accpremium/world_accpremium.sql
+new file mode 100644
+index 0000000..4dc2128
+--- /dev/null
++++ b/sql/accpremium/world_accpremium.sql
+@@ -0,0 +1,2 @@
++DELETE FROM `command` WHERE `name`='accpadd' OR `name`='accpdel';
++INSERT INTO `command` VALUES ('accpadd', 3, 'Syntax: .accpadd $account_id $5d2h10m15s\r\n\r\nAdd a premium account with time to expire.'),('accpdel', 3, 'Syntax: .accpdel $account_id\r\n\r\nDelete a premium account.');
+\ No newline at end of file
+diff --git a/src/authserver/AuthSocket.cpp b/src/authserver/AuthSocket.cpp
+index 4b309ae..3197606 100644
+--- a/src/authserver/AuthSocket.cpp
++++ b/src/authserver/AuthSocket.cpp
+@@ -346,6 +346,8 @@ bool AuthSocket::_HandleLogonChallenge()
+     // Set expired bans to inactive
+     LoginDatabase.Execute("UPDATE account_banned SET active = 0 WHERE unbandate<=UNIX_TIMESTAMP() AND unbandate<>bandate");
+     LoginDatabase.Execute("DELETE FROM ip_banned WHERE unbandate<=UNIX_TIMESTAMP() AND unbandate<>bandate");
++    // Delete expired account premium
++    LoginDatabase.Execute("DELETE FROM account_premium WHERE unsetdate<=UNIX_TIMESTAMP() AND unsetdate<>setdate");
+ 
+     // Verify that this IP is not in the ip_banned table
+     // No SQL injection possible (paste the IP address as passed by the socket)
+diff --git a/src/game/AuctionHouseBot.cpp b/src/game/AuctionHouseBot.cpp
+index bf0bc06..a1517b2 100644
+--- a/src/game/AuctionHouseBot.cpp
++++ b/src/game/AuctionHouseBot.cpp
+@@ -695,7 +695,7 @@ void AuctionHouseBot::Update()
+     if ((!AHBSeller) && (!AHBBuyer))
+         return;
+ 
+-    WorldSession _session(AHBplayerAccount, NULL, SEC_PLAYER, true, 0, LOCALE_enUS);
++    WorldSession _session(AHBplayerAccount, NULL, SEC_PLAYER, false, true, 0, LOCALE_enUS);
+     Player _AHBplayer(&_session);
+     _AHBplayer.Initialize(AHBplayerGUID);
+     ObjectAccessor::Instance().AddObject(&_AHBplayer);
+diff --git a/src/game/Chat.cpp b/src/game/Chat.cpp
+index 9170a09..47c697a 100644
+--- a/src/game/Chat.cpp
++++ b/src/game/Chat.cpp
+@@ -682,6 +682,10 @@ ChatCommand * ChatHandler::getCommandTable()
+         { "bindsight",      SEC_ADMINISTRATOR,  false, &ChatHandler::HandleBindSightCommand,           "", NULL },
+         { "unbindsight",    SEC_ADMINISTRATOR,  false, &ChatHandler::HandleUnbindSightCommand,         "", NULL },
+ 
++        // accpremium commands
++        { "accpadd",        SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleAddPremiumAccountCommand,   "", NULL },
++        { "accpdel",        SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleDelPremiumAccountCommand,   "", NULL },
++
+         // warp command
+         { "warp",           SEC_ADMINISTRATOR,  false, &ChatHandler::HandleWarpCommand,                "", NULL },
+ 
+diff --git a/src/game/Chat.h b/src/game/Chat.h
+index bc61eb6..082785e 100644
+--- a/src/game/Chat.h
++++ b/src/game/Chat.h
+@@ -431,6 +431,10 @@ class ChatHandler
+ 
+         bool HandleResetAllCommand(const char * args);
+ 
++        // accpremium commands
++        bool HandleAddPremiumAccountCommand(const char* args);
++        bool HandleDelPremiumAccountCommand(const char* args);
++
+         // warp command
+         bool HandleWarpCommand(const char * args);                                              
+ 
+diff --git a/src/game/Formulas.h b/src/game/Formulas.h
+index d650dda..796ea05 100644
+--- a/src/game/Formulas.h
++++ b/src/game/Formulas.h
+@@ -99,7 +99,8 @@ namespace BlizzLike
+             if (u->GetTypeId() == TYPEID_UNIT && ((Creature*)u)->isElite())
+                 xp_gain *= 2;
+ 
+-            return (uint32)(xp_gain*sWorld.getRate(RATE_XP_KILL));
++            float premium_rate = pl->GetSession()->IsPremium() ? sWorld.getRate(RATE_XP_KILL_PREMIUM) : 1.0f;
++            return (uint32)(xp_gain * sWorld.getRate(RATE_XP_KILL) * premium_rate);
+         }
+ 
+         inline uint32 xp_Diff(uint32 lvl)
+diff --git a/src/game/Level3.cpp b/src/game/Level3.cpp
+index b5cb957..481a0f2 100644
+--- a/src/game/Level3.cpp
++++ b/src/game/Level3.cpp
+@@ -5266,6 +5266,40 @@ bool ChatHandler::HandleResetAllCommand(const char * args)
+     return true;
+ }
+ 
++bool ChatHandler::HandleAddPremiumAccountCommand(const char* args)
++{
++    if (!*args)
++        return false;
++
++    char* id_accpremium  = strtok((char*)args, " ");
++    char* time_to_expire = strtok((char*)NULL, " ");
++    uint32 idaccpremium = atoi(id_accpremium);
++    if (!idaccpremium || !time_to_expire)
++        return false;
++
++    LoginDatabase.PExecute("DELETE FROM account_premium WHERE id = '%u'", idaccpremium);
++    LoginDatabase.PExecute("INSERT INTO account_premium VALUES ('%u',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+'%u', 1, 1)", idaccpremium, TimeStringToSecs(time_to_expire));
++    PSendSysMessage("%s%s%u|r", "|cff00ff00", "Add new premium account id: ", idaccpremium);
++
++    return true;
++}
++
++bool ChatHandler::HandleDelPremiumAccountCommand(const char* args)
++{
++    if (!*args)
++        return false;
++
++    char* id_accpremium  = strtok((char*)args, " ");
++    uint32 idaccpremium = atoi(id_accpremium);
++    if (!idaccpremium)
++        return false;
++
++    LoginDatabase.PExecute("DELETE FROM account_premium WHERE id = '%u'", idaccpremium);
++    PSendSysMessage("%s%s%u|r", "|cff00ff00", "Del premium account id: ", idaccpremium);
++
++    return true;
++}
++
+ bool ChatHandler::HandleServerShutDownCancelCommand(const char* /*args*/)
+ {
+     sWorld.ShutdownCancel();
+diff --git a/src/game/Player.cpp b/src/game/Player.cpp
+index 94cc424..da4200d 100644
+--- a/src/game/Player.cpp
++++ b/src/game/Player.cpp
+@@ -5697,6 +5697,8 @@ void Player::CheckAreaExploreAndOutdoor()
+                     XP = uint32(objmgr.GetBaseXP(p->area_level)*sWorld.getRate(RATE_XP_EXPLORE));
+                 }
+ 
++                if(GetSession()->IsPremium())
++                XP *= sWorld.getRate(RATE_XP_EXPLORE_PREMIUM);
+                 GiveXP(XP, NULL);
+                 SendExplorationExperience(area,XP);
+             }
+@@ -13349,6 +13351,8 @@ void Player::RewardQuest(Quest const *pQuest, uint32 reward, Object* questGiver,
+ 
+     // Not give XP in case already completed once repeatable quest
+     uint32 XP = q_status.m_rewarded ? 0 : uint32(pQuest->XPValue(this)*sWorld.getRate(RATE_XP_QUEST));
++    if (GetSession()->IsPremium())
++        XP *= sWorld.getRate(RATE_XP_QUEST_PREMIUM);
+ 
+     if (getLevel() < sWorld.getConfig(CONFIG_MAX_PLAYER_LEVEL))
+         GiveXP(XP , NULL);
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index a4a0b7b..fbe126a 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -441,8 +441,11 @@ void World::LoadConfigSettings(bool reload)
+     rate_values[RATE_DROP_ITEM_REFERENCED] = sConfig.GetFloatDefault("Rate.Drop.Item.Referenced", 1.0f);
+     rate_values[RATE_DROP_MONEY]  = sConfig.GetFloatDefault("Rate.Drop.Money", 1.0f);
+     rate_values[RATE_XP_KILL]     = sConfig.GetFloatDefault("Rate.XP.Kill", 1.0f);
++    rate_values[RATE_XP_KILL_PREMIUM]      = sConfig.GetFloatDefault("Rate.XP.Kill.Premium", 1.0f);
+     rate_values[RATE_XP_QUEST]    = sConfig.GetFloatDefault("Rate.XP.Quest", 1.0f);
++    rate_values[RATE_XP_QUEST_PREMIUM]     = sConfig.GetFloatDefault("Rate.XP.Quest.Premium", 1.0f);
+     rate_values[RATE_XP_EXPLORE]  = sConfig.GetFloatDefault("Rate.XP.Explore", 1.0f);
++    rate_values[RATE_XP_EXPLORE_PREMIUM]   = sConfig.GetFloatDefault("Rate.XP.Explore.Premium", 1.0f);
+     rate_values[RATE_XP_PAST_70]  = sConfig.GetFloatDefault("Rate.XP.PastLevel70", 1.0f);
+     rate_values[RATE_REPUTATION_GAIN]  = sConfig.GetFloatDefault("Rate.Reputation.Gain", 1.0f);
+     rate_values[RATE_CREATURE_NORMAL_DAMAGE]          = sConfig.GetFloatDefault("Rate.Creature.Normal.Damage", 1.0f);
+diff --git a/src/game/World.h b/src/game/World.h
+index 3a79e84..b29e03a 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -261,8 +261,11 @@ enum Rates
+     RATE_DROP_ITEM_REFERENCED,
+     RATE_DROP_MONEY,
+     RATE_XP_KILL,
++    RATE_XP_KILL_PREMIUM,
+     RATE_XP_QUEST,
++    RATE_XP_QUEST_PREMIUM,
+     RATE_XP_EXPLORE,
++    RATE_XP_EXPLORE_PREMIUM,
+     RATE_XP_PAST_70,
+     RATE_REPUTATION_GAIN,
+     RATE_CREATURE_NORMAL_HP,
+diff --git a/src/game/WorldSession.cpp b/src/game/WorldSession.cpp
+index 7ddd093..693a3f8 100644
+--- a/src/game/WorldSession.cpp
++++ b/src/game/WorldSession.cpp
+@@ -23,9 +23,9 @@
+ #include "ScriptMgr.h"
+ 
+ // WorldSession constructor
+-WorldSession::WorldSession(uint32 id, WorldSocket *sock, uint32 sec, uint8 expansion, time_t mute_time, LocaleConstant locale) :
++WorldSession::WorldSession(uint32 id, WorldSocket *sock, uint32 sec, bool ispremium, uint8 expansion, time_t mute_time, LocaleConstant locale) :
+ LookingForGroup_auto_join(false), LookingForGroup_auto_add(false), m_muteTime(mute_time),
+-_player(NULL), m_Socket(sock),_security(sec), _accountId(id), m_expansion(expansion),
++_player(NULL), m_Socket(sock), _security(sec), _ispremium(ispremium), _accountId(id), m_expansion(expansion),
+ m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(objmgr.GetIndexForLocale(locale)),
+ _logoutTime(0), m_inQueue(false), m_playerLoading(false), m_playerLogout(false), m_playerRecentlyLogout(false), m_playerSave(false),
+ m_latency(0), m_timeOutTime(0)
+diff --git a/src/game/WorldSession.h b/src/game/WorldSession.h
+index e38b42d..125cd29 100644
+--- a/src/game/WorldSession.h
++++ b/src/game/WorldSession.h
+@@ -53,7 +53,7 @@ class WorldSession
+     friend class CharacterHandler;
+ 
+     public:
+-        WorldSession(uint32 id, WorldSocket *sock, uint32 sec, uint8 expansion, time_t mute_time, LocaleConstant locale);
++        WorldSession(uint32 id, WorldSocket *sock, uint32 sec, bool ispremium, uint8 expansion, time_t mute_time, LocaleConstant locale);
+         ~WorldSession();
+ 
+         bool PlayerLoading() const { return m_playerLoading; }
+@@ -71,6 +71,7 @@ class WorldSession
+         void SendAreaTriggerMessage(const char* Text, ...) ATTR_PRINTF(2,3);
+ 
+         uint32 GetSecurity() const { return _security; }
++        bool IsPremium() const { return _ispremium; }
+         uint32 GetAccountId() const { return _accountId; }
+         Player* GetPlayer() const { return _player; }
+         char const* GetPlayerName() const;
+@@ -650,6 +651,7 @@ class WorldSession
+         uint32 _security;
+         uint32 _accountId;
+         uint8 m_expansion;
++        bool _ispremium;
+ 
+         time_t _logoutTime;
+         bool m_inQueue;                                     // session wait in auth.queue
+diff --git a/src/game/WorldSocket.cpp b/src/game/WorldSocket.cpp
+index 5b41eff..4e53000 100644
+--- a/src/game/WorldSocket.cpp
++++ b/src/game/WorldSocket.cpp
+@@ -685,6 +685,7 @@ int WorldSocket::HandleAuthSession (WorldPacket& recvPacket)
+     //uint8 expansion = 0;
+     LocaleConstant locale;
+     std::string account;
++    bool isPremium = false;
+     Sha1Hash sha1;
+     BigNumber v, s, g, N;
+     WorldPacket packet, SendAddonPacked;
+@@ -832,6 +833,17 @@ int WorldSocket::HandleAuthSession (WorldPacket& recvPacket)
+         return -1;
+     }
+ 
++    // Check if account premium
++    QueryResult_AutoPtr premresult = LoginDatabase.PQuery ("SELECT 1 "
++                                "FROM account_premium "
++                                "WHERE id = '%u' "
++                                "AND active = 1",
++                                id);
++    if (premresult) // if account premium
++    {
++        isPremium = true;
++    }
++
+     // Check locked state for server
+     sWorld.UpdateAllowedSecurity();
+     AccountTypes allowedAccountType = sWorld.GetPlayerSecurityLimit ();
+@@ -888,7 +900,7 @@ int WorldSocket::HandleAuthSession (WorldPacket& recvPacket)
+                             safe_account.c_str());
+ 
+     // NOTE ATM the socket is single-threaded, have this in mind ...
+-    ACE_NEW_RETURN (m_Session, WorldSession (id, this, security, expansion, mutetime, locale), -1);
++    ACE_NEW_RETURN (m_Session, WorldSession (id, this, security, isPremium, expansion, mutetime, locale), -1);
+ 
+     m_Crypt.SetKey(&K);
+     m_Crypt.Init();
+diff --git a/src/worldserver/worldserver.conf.dist b/src/worldserver/worldserver.conf.dist
+index 2961462..62413f6 100644
+--- a/src/worldserver/worldserver.conf.dist
++++ b/src/worldserver/worldserver.conf.dist
+@@ -1278,7 +1278,10 @@ Visibility.Notify.Period.InBGArenas   = 1000
+ #    Rate.XP.Kill
+ #    Rate.XP.Quest
+ #    Rate.XP.Explore
+-#        XP rates
++#    Rate.XP.Kill.Premium
++#    Rate.XP.Quest.Premium
++#    Rate.XP.Explore.Premium
++#        XP rates (Premium modifier)
+ #        Default: 1
+ #
+ #    Rate.XP.PastLevel70
+@@ -1412,6 +1415,9 @@ Rate.Drop.Money = 1
+ Rate.XP.Kill    = 1
+ Rate.XP.Quest   = 1
+ Rate.XP.Explore = 1
++Rate.XP.Kill.Premium    = 1
++Rate.XP.Quest.Premium   = 1
++Rate.XP.Explore.Premium = 1
+ Rate.XP.PastLevel70 = 1
+ Rate.Rest.InGame = 1
+ Rate.Rest.Offline.InTavernOrCity = 1
