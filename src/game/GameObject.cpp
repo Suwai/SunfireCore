@@ -197,6 +197,7 @@ void GameObject::Update(uint32 diff)
                     m_lootState = GO_READY;
                     break;
                 }
+
                 case GAMEOBJECT_TYPE_FISHINGNODE:
                 {
                     // fishing code (bobber ready)
@@ -211,7 +212,7 @@ void GameObject::Update(uint32 diff)
 
                             UpdateData udata;
                             WorldPacket packet;
-                            BuildValuesUpdateBlockForPlayer(&udata,caster->ToPlayer());
+                            BuildValuesUpdateBlockForPlayer(&udata, caster->ToPlayer());
                             udata.BuildPacket(&packet);
                             caster->ToPlayer()->GetSession()->SendPacket(&packet);
 
@@ -245,7 +246,7 @@ void GameObject::Update(uint32 diff)
                             Unit* caster = GetOwner();
                             if (caster && caster->GetTypeId() == TYPEID_PLAYER)
                             {
-                                caster->FinishSpell(CURRENT_CHANNELED_SPELL);
+                                caster->ToPlayer()->RemoveGameObject(this, false);
 
                                 WorldPacket data(SMSG_FISH_NOT_HOOKED,0);
                                 caster->ToPlayer()->GetSession()->SendPacket(&data);
@@ -1075,12 +1076,8 @@ void GameObject::Use(Unit* user)
 
             switch(getLootState())
             {
-                case GO_READY:                              // ready for loot
+				case GO_READY:                              // ready for loot
                 {
-                    // 1) skill must be >= base_zone_skill
-                    // 2) if skill == base_zone_skill => 5% chance
-                    // 3) chance is linear dependence from (base_zone_skill-skill)
-
                     uint32 subzone = GetAreaId();
 
                     int32 zone_skill = objmgr.GetFishingBaseSkillLevel(subzone);
@@ -1092,37 +1089,45 @@ void GameObject::Use(Unit* user)
                         sLog.outErrorDb("Fishable areaId %u is not properly defined in skill_fishing_base_level.",subzone);
 
                     int32 skill = player->GetSkillValue(SKILL_FISHING);
-                    int32 chance = skill - zone_skill + 5;
-                    int32 roll = irand(1,100);
 
-                    DEBUG_LOG("Fishing check (skill: %i zone min skill: %i chance %i roll: %i",skill,zone_skill,chance,roll);
-
-                    if (skill >= zone_skill && chance >= roll)
+                    int32 chance;
+                    if (skill < zone_skill)
                     {
+                        chance = int32(pow((double)skill/zone_skill, 2) * 100);
+                        if (chance < 1)
+                            chance = 1;
+                    }
+                    else
+                        chance = 100;
+
+                    int32 roll = irand(1, 100);
+
+                     DEBUG_LOG("Fishing check (skill: %i zone min skill: %i chance %i roll: %i",skill,zone_skill,chance,roll);
+
+                    // but you will likely cause junk in areas that require a high fishing skill (not yet implemented)
+                    if (chance >= roll)
+                    {
+                        player->UpdateFishingSkill();
+
+                        /// @todo I do not understand this hack. Need some explanation.
                         // prevent removing GO at spell cancel
                         player->RemoveGameObject(this,false);
                         SetOwnerGUID(player->GetGUID());
 
-                        //fish catched
-                        player->UpdateFishingSkill();
-
-                        GameObject* ok = LookupFishingHoleAround(DEFAULT_VISIBILITY_DISTANCE);
+                        /// @todo find reasonable value for fishing hole search
+                        GameObject* ok = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
                         if (ok)
                         {
-                            player->SendLoot(ok->GetGUID(),LOOT_FISHINGHOLE);
+                            ok->Use(player);
                             SetLootState(GO_JUST_DEACTIVATED);
                         }
                         else
-                            player->SendLoot(GetGUID(),LOOT_FISHING);
+                            player->SendLoot(GetGUID(), LOOT_FISHING);
                     }
+                    /// @todo else: junk
                     else
-                    {
-                        // fish escaped, can be deleted now
-                        SetLootState(GO_JUST_DEACTIVATED);
+                        m_respawnTime = time(NULL);
 
-                        WorldPacket data(SMSG_FISH_ESCAPED, 0);
-                        player->GetSession()->SendPacket(&data);
-                    }
                     break;
                 }
                 case GO_JUST_DEACTIVATED:                   // nothing to do, will be deleted at next update
