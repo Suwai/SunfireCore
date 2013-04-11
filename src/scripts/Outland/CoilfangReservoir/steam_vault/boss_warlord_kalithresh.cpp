@@ -1,5 +1,19 @@
+
 /*
- * BlizzLikeCore integrates as part of this file: CREDITS.md and LICENSE.md
+ * Copyright (C) 2011-2013 BlizzLikeGroup <http://blizzlike.servegame.com/>
+ * Please, read the credits file.
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation; either version 2 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 /* ScriptData
@@ -37,42 +51,48 @@ struct mob_naga_distillerAI : public ScriptedAI
 
     ScriptedInstance *pInstance;
 
-    void Reset()
-    {
-        me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-        me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-
-        //hack, due to really weird spell behaviour :(
-        if (pInstance)
+        void Reset()
         {
-            if (pInstance->GetData(TYPE_DISTILLER) == IN_PROGRESS)
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+
+			DoCast(me, 31261);
+
+            //hack, due to really weird spell behaviour :(
+            if (pInstance)
             {
-                me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-                me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+                if (pInstance->GetData(TYPE_DISTILLER) == IN_PROGRESS)
+                {
+                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+                }
             }
         }
-    }
 
-    void EnterCombat(Unit* /*who*/) { }
+        void EnterCombat(Unit * /*who*/) { }
 
-    void StartRageGen(Unit* /*caster*/)
+        void StartRageGen(Unit * /*caster*/)
+
     {
-        me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-        me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-
-        DoCast(me,SPELL_WARLORDS_RAGE_NAGA,true);
-
-        if (pInstance)
-            pInstance->SetData(TYPE_DISTILLER,IN_PROGRESS);
-    }
-
-    void DamageTaken(Unit* /*done_by*/, uint32 &damage)
-    {
-        if (me->GetHealth() <= damage)
+		if (Creature* kalithresh = me->FindNearestCreature(17798, 100.0f))
+			if (kalithresh)
+        {
+				pInstance->SetData(DATA_DISTILLER, IN_PROGRESS);
+				me->CastSpell(kalithresh, SPELL_WARLORDS_RAGE_NAGA, true);
+				me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+				me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+        }
             if (pInstance)
-                pInstance->SetData(TYPE_DISTILLER,DONE);
-    }
-};
+                pInstance->SetData(TYPE_DISTILLER,IN_PROGRESS);
+   }
+
+        void DamageTaken(Unit * /*done_by*/, uint32 &damage)
+        {
+            if (me->GetHealth() <= damage)
+                if (pInstance)
+                    pInstance->SetData(TYPE_DISTILLER,DONE);
+        }
+    };
 
 struct boss_warlord_kalithreshAI : public ScriptedAI
 {
@@ -83,114 +103,87 @@ struct boss_warlord_kalithreshAI : public ScriptedAI
 
     ScriptedInstance *pInstance;
 
-    uint32 Reflection_Timer;
-    uint32 Impale_Timer;
-    uint32 Rage_Timer;
-    bool CanRage;
+        uint32 Reflection_Timer;
+        uint32 Impale_Timer;
+        uint32 Rage_Timer;
+        bool CanRage;
 
-    void Reset()
-    {
-        Reflection_Timer = 10000;
-        Impale_Timer = 7000+rand()%7000;
-        Rage_Timer = 45000;
-        CanRage = false;
-
-        if (pInstance)
-            pInstance->SetData(TYPE_WARLORD_KALITHRESH, NOT_STARTED);
-    }
-
-    void EnterCombat(Unit* /*who*/)
-    {
-        switch(rand()%3)
+        void Reset()
         {
-            case 0: DoScriptText(SAY_AGGRO1, me); break;
-            case 1: DoScriptText(SAY_AGGRO2, me); break;
-            case 2: DoScriptText(SAY_AGGRO3, me); break;
-        }
+            Reflection_Timer = 10000;
+            Impale_Timer = 7000+rand()%7000;
+            Rage_Timer = 45000;
+            CanRage = false;
 
-        if (pInstance)
-            pInstance->SetData(TYPE_WARLORD_KALITHRESH, IN_PROGRESS);
-    }
-
-    void KilledUnit(Unit* /*victim*/)
-    {
-        switch(rand()%2)
-        {
-            case 0: DoScriptText(SAY_SLAY1, me); break;
-            case 1: DoScriptText(SAY_SLAY2, me); break;
-        }
-    }
-
-    Creature* SelectCreatureInGrid(uint32 entry, float range)
-    {
-        Creature* pCreature = NULL;
-
-        CellPair pair(BlizzLike::ComputeCellPair(me->GetPositionX(), me->GetPositionY()));
-        Cell cell(pair);
-        cell.data.Part.reserved = ALL_DISTRICT;
-        cell.SetNoCreate();
-
-        BlizzLike::NearestCreatureEntryWithLiveStateInObjectRangeCheck creature_check(*me, entry, true, range);
-        BlizzLike::CreatureLastSearcher<BlizzLike::NearestCreatureEntryWithLiveStateInObjectRangeCheck> searcher(pCreature, creature_check);
-        TypeContainerVisitor<BlizzLike::CreatureLastSearcher<BlizzLike::NearestCreatureEntryWithLiveStateInObjectRangeCheck>, GridTypeMapContainer> creature_searcher(searcher);
-        cell.Visit(pair, creature_searcher,*(me->GetMap()));
-
-        return pCreature;
-    }
-
-    void SpellHit(Unit* /*caster*/, const SpellEntry *spell)
-    {
-        //FIXME: hack :(
-        if (spell->Id == SPELL_WARLORDS_RAGE_PROC)
             if (pInstance)
-                if (pInstance->GetData(TYPE_DISTILLER) == DONE)
-                    me->RemoveAurasDueToSpell(SPELL_WARLORDS_RAGE_PROC);
-    }
+                pInstance->SetData(TYPE_WARLORD_KALITHRESH, NOT_STARTED);
+        }
 
-    void JustDied(Unit* /*Killer*/)
-    {
-        DoScriptText(SAY_DEATH, me);
-
-        if (pInstance)
-            pInstance->SetData(TYPE_WARLORD_KALITHRESH, DONE);
-    }
-
-    void UpdateAI(const uint32 diff)
-    {
-        if (!UpdateVictim())
-            return;
-
-        if (Rage_Timer <= diff)
+        void EnterCombat(Unit * /*who*/)
         {
-            Creature* distiller = SelectCreatureInGrid(17954, 100);
-            if (distiller)
+            DoScriptText(RAND(SAY_AGGRO1,SAY_AGGRO2,SAY_AGGRO3), me);
+
+            if (pInstance)
+                pInstance->SetData(TYPE_WARLORD_KALITHRESH, IN_PROGRESS);
+        }
+
+        void KilledUnit(Unit* /*victim*/)
+        {
+            DoScriptText(RAND(SAY_SLAY1,SAY_SLAY2), me);
+        }
+
+        void SpellHit(Unit * /*caster*/, const SpellEntry *spell)
+        {
+            //hack :(
+            if (spell->Id == SPELL_WARLORDS_RAGE_PROC)
+                if (pInstance)
+                    if (pInstance->GetData(TYPE_DISTILLER) == DONE)
+                        me->RemoveAurasDueToSpell(SPELL_WARLORDS_RAGE_PROC);
+        }
+
+        void JustDied(Unit* /*Killer*/)
+        {
+            DoScriptText(SAY_DEATH, me);
+
+            if (pInstance)
+                pInstance->SetData(TYPE_WARLORD_KALITHRESH, DONE);
+        }
+
+        void UpdateAI(const uint32 diff)
+        {
+            if (!UpdateVictim())
+                return;
+
+            if (Rage_Timer <= diff)
             {
-                DoScriptText(SAY_REGEN, me);
-                DoCast(me,SPELL_WARLORDS_RAGE);
-                ((mob_naga_distillerAI*)distiller->AI())->StartRageGen(me);
-            }
-            Rage_Timer = 3000+rand()%15000;
-        } else Rage_Timer -= diff;
+                if (Creature* distiller = me->FindNearestCreature(17954, 100.0f))
+                {
+                    DoScriptText(SAY_REGEN, me);
+                    DoCast(me, SPELL_WARLORDS_RAGE);
+                    ((mob_naga_distillerAI*)distiller->AI())->StartRageGen(me);
+                }
+                Rage_Timer = 5000+rand()%15000;
+            } else Rage_Timer -= diff;
 
-        //Reflection_Timer
-        if (Reflection_Timer <= diff)
-        {
-            DoCast(me, SPELL_SPELL_REFLECTION);
-            Reflection_Timer = 15000+rand()%10000;
-        } else Reflection_Timer -= diff;
+            //Reflection_Timer
+            if (Reflection_Timer <= diff)
+            {
+                DoCast(me, SPELL_SPELL_REFLECTION);
+                Reflection_Timer = 15000+rand()%10000;
+            } else Reflection_Timer -= diff;
 
-        //Impale_Timer
-        if (Impale_Timer <= diff)
-        {
-            if (Unit* pTarget = SelectUnit(SELECT_TARGET_RANDOM,0))
-                DoCast(pTarget,SPELL_IMPALE);
+            //Impale_Timer
+            if (Impale_Timer <= diff)
+            {
+                if (Unit *pTarget = SelectUnit(SELECT_TARGET_RANDOM,0))
+                    DoCast(pTarget, SPELL_IMPALE);
 
-            Impale_Timer = 7500+rand()%5000;
-        } else Impale_Timer -= diff;
+                Impale_Timer = 7500+rand()%5000;
+            } else Impale_Timer -= diff;
 
-        DoMeleeAttackIfReady();
-    }
-};
+            DoMeleeAttackIfReady();
+        }
+    };
 
 CreatureAI* GetAI_mob_naga_distiller(Creature* pCreature)
 {
@@ -216,4 +209,3 @@ void AddSC_boss_warlord_kalithresh()
     newscript->GetAI = &GetAI_boss_warlord_kalithresh;
     newscript->RegisterSelf();
 }
-
