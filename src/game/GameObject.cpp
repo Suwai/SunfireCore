@@ -1111,7 +1111,7 @@ void GameObject::Use(Unit* user)
 
                         /// @todo I do not understand this hack. Need some explanation.
                         // prevent removing GO at spell cancel
-                        player->RemoveGameObject(this,false);
+                        player->RemoveGameObject(this, false);
                         SetOwnerGUID(player->GetGUID());
 
                         /// @todo find reasonable value for fishing hole search
