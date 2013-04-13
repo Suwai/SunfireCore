@@ -197,7 +197,6 @@ void GameObject::Update(uint32 diff)
                     m_lootState = GO_READY;
                     break;
                 }
-
                 case GAMEOBJECT_TYPE_FISHINGNODE:
                 {
                     // fishing code (bobber ready)
@@ -212,7 +211,7 @@ void GameObject::Update(uint32 diff)
 
                             UpdateData udata;
                             WorldPacket packet;
-                            BuildValuesUpdateBlockForPlayer(&udata, caster->ToPlayer());
+                            BuildValuesUpdateBlockForPlayer(&udata,caster->ToPlayer());
                             udata.BuildPacket(&packet);
                             caster->ToPlayer()->GetSession()->SendPacket(&packet);
 
@@ -246,7 +245,7 @@ void GameObject::Update(uint32 diff)
                             Unit* caster = GetOwner();
                             if (caster && caster->GetTypeId() == TYPEID_PLAYER)
                             {
-                                caster->ToPlayer()->RemoveGameObject(this, false);
+                                caster->FinishSpell(CURRENT_CHANNELED_SPELL);
 
                                 WorldPacket data(SMSG_FISH_NOT_HOOKED,0);
                                 caster->ToPlayer()->GetSession()->SendPacket(&data);
@@ -353,7 +352,7 @@ void GameObject::Update(uint32 diff)
                         {
                             //BattleGround gameobjects case
                             if (ok->ToPlayer()->InBattleGround())
-                                if (BattleGround* bg = ok->ToPlayer()->GetBattleGround())
+                                if (BattleGround *bg = ok->ToPlayer()->GetBattleGround())
                                     bg->HandleTriggerBuff(GetGUID());
                         }
                     }
@@ -395,7 +394,7 @@ void GameObject::Update(uint32 diff)
                             lootingGroupLeaderGUID = 0;
                         }
                     }
-                    default:
+                default:
                     break;
             }
             break;
@@ -467,6 +466,7 @@ void GameObject::Update(uint32 diff)
         }
     }
 }
+
 
 void GameObject::Refresh()
 {
