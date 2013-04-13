@@ -104,6 +104,9 @@ void WorldSession::SendDoFlight(uint16 MountId, uint32 path, uint32 pathNode)
     if (GetPlayer()->hasUnitState(UNIT_STAT_DIED))
         GetPlayer()->RemoveSpellsCausingAura(SPELL_AURA_FEIGN_DEATH);
 
+    // Movement Anticheat
+    GetPlayer()->m_anti_ontaxipath = true;
+
     while (GetPlayer()->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLIGHT_MOTION_TYPE)
         GetPlayer()->GetMotionMaster()->MovementExpired(false);
 
@@ -192,8 +195,15 @@ void WorldSession::HandleTaxiNextDestinationOpcode(WorldPacket& recv_data)
 
     uint32 curDest = GetPlayer()->m_taxi.GetTaxiDestination();
     if (!curDest)
-        return;
-
+    {
+        // Movement Anticheat
+        GetPlayer()->Relocate(movementInfo.GetPos());
+        GetPlayer()->m_movementInfo = movementInfo;
+        GetPlayer()->m_anti_lastmovetime = movementInfo.time;
+        GetPlayer()->m_anti_justteleported = true;
+        //<<< end Movement Anticheat
+         return;
+    }
     TaxiNodesEntry const* curDestNode = sTaxiNodesStore.LookupEntry(curDest);
 
     if (curDestNode && curDestNode->map_id == GetPlayer()->GetMapId())
@@ -201,6 +211,12 @@ void WorldSession::HandleTaxiNextDestinationOpcode(WorldPacket& recv_data)
         while(GetPlayer()->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLIGHT_MOTION_TYPE)
             GetPlayer()->GetMotionMaster()->MovementExpired(false);
     }
+	    // Movement Anticheat
+    GetPlayer()->SetPosition(movementInfo.GetPos()->GetPositionX(), movementInfo.GetPos()->GetPositionY(), movementInfo.GetPos()->GetPositionZ(), movementInfo.GetPos()->GetOrientation());
+    GetPlayer()->m_movementInfo = movementInfo;
+    GetPlayer()->m_anti_lastmovetime = movementInfo.time;
+    //<<< end Movement Anticheat
+
 
     // far teleport case
     if (curDestNode && curDestNode->map_id != GetPlayer()->GetMapId())
