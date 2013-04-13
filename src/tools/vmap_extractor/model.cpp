@@ -69,8 +69,9 @@ bool Model::ConvertToVMAPModel(char * outfilename)
         printf("Can't create the output file '%s'\n",outfilename);
         return false;
     }
-    fwrite("VMAP003",8,1,output);
-    uint32 nVertices = header.nVertices;
+    fwrite(szRawVMAPMagic,8,1,output);
+    uint32 nVertices = 0;
+    nVertices = header.nVertices;
     fwrite(&nVertices, sizeof(int), 1, output);
     uint32 nofgroups = 1;
     fwrite(&nofgroups,sizeof(uint32), 1, output);
@@ -194,4 +195,3 @@ ModelInstance::ModelInstance(MPQFile &f,const char* ModelInstName, uint32 mapID,
         realx2, realy2
         ); */
 }
-

@@ -32,6 +32,7 @@
 #include "BattleGround.h"
 #include "Util.h"
 #include "TemporarySummon.h"
+#include "PathFinder.h"
 
 #define SPELL_CHANNEL_UPDATE_INTERVAL (1*IN_MILLISECONDS)
 
@@ -1634,16 +1635,16 @@ void Spell::SetTargetMap(uint32 i, uint32 cur)
             }
 
             Position pos;
-               switch (cur)
-             {
-             case TARGET_DEST_CASTER_FRONT_LEAP:
-             case TARGET_DEST_CASTER_FRONT_LEFT:
-             case TARGET_DEST_CASTER_BACK_LEFT:
-             case TARGET_DEST_CASTER_BACK_RIGHT:
-             case TARGET_DEST_CASTER_FRONT_RIGHT:
-                     m_caster->GetFirstCollisionPosition(pos, dist, angle);
-                     break;
-            default:
+            switch (cur)
+            {
+                case TARGET_DEST_CASTER_FRONT_LEAP:
+                case TARGET_DEST_CASTER_FRONT_LEFT:
+                case TARGET_DEST_CASTER_BACK_LEFT:
+                case TARGET_DEST_CASTER_BACK_RIGHT:
+                case TARGET_DEST_CASTER_FRONT_RIGHT:
+                    m_caster->GetFirstCollisionPosition(pos, dist, angle);
+                    break;
+                default:
                     m_caster->GetNearPosition(pos, dist, angle);
                     break;
             }
@@ -1699,14 +1700,14 @@ void Spell::SetTargetMap(uint32 i, uint32 cur)
             case TARGET_DEST_TARGET_BACK_LEFT:
             case TARGET_DEST_TARGET_BACK_RIGHT:
             case TARGET_DEST_TARGET_FRONT_RIGHT:
-                    {
-                    target->GetContactPoint(m_caster, pos.m_positionX, pos.m_positionY, pos.m_positionZ, dist);
-                    target->GetFirstCollisionPosition(pos, dist, angle);
-                    }
-                    break;
+            {
+                target->GetContactPoint(m_caster, pos.m_positionX, pos.m_positionY, pos.m_positionZ, dist);
+                target->GetFirstCollisionPosition(pos, dist, angle);
+                break;
+            }
             default:
-                    target->GetNearPosition(pos, dist, angle);
-                    break;
+                target->GetNearPosition(pos, dist, angle);
+                break;
             }
             m_targets.setDst(&pos);
             break;
@@ -2185,6 +2186,13 @@ void Spell::cast(bool skipCheck)
         SetExecutedCurrently(false);
         return;
     }
+	if ((m_customAttr & SPELL_ATTR_CU_CHARGE) && !CheckCharge())
+    {
+        SendCastResult(SPELL_FAILED_NOPATH);
+        cancel();
+        SetExecutedCurrently(false);
+        return;
+    }
 
     if (m_caster->GetTypeId() != TYPEID_PLAYER && m_targets.getUnitTarget() && m_targets.getUnitTarget() != m_caster)
         m_caster->SetInFront(m_targets.getUnitTarget());
@@ -2297,6 +2305,31 @@ void Spell::cast(bool skipCheck)
 
     SetExecutedCurrently(false);
 }
+
+bool Spell::CheckCharge()
+{
+    if (!m_caster)
+        return false;
+
+    Unit *target = m_targets.getUnitTarget();
+    if (!target)
+        return false;
+
+    float angle = target->GetAngle(m_caster) - target->GetOrientation();
+    Position pos;
+    target->GetContactPoint(m_caster, pos.m_positionX, pos.m_positionY, pos.m_positionZ);
+    target->GetFirstCollisionPosition(pos, target->GetObjectSize(), angle);
+
+    PathInfo path(m_caster, pos.m_positionX, pos.m_positionY, pos.m_positionZ + target->GetObjectSize());
+    PointPath pointPath = path.getFullPath();
+
+    if (pointPath.GetTotalLength() > 25.0f)
+        return false;
+    else
+        return true;
+
+}
+
 
 void Spell::handle_immediate()
 {

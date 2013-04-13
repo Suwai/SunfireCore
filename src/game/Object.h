@@ -18,8 +18,9 @@
 #include <string>
 
 #define CONTACT_DISTANCE            0.5f
-#define INTERACTION_DISTANCE        5.0f
+#define INTERACTION_DISTANCE        7.0f
 #define ATTACK_DISTANCE             5.0f
+#define SIGHT_RANGE_UNIT            50.0f
 #define MAX_VISIBILITY_DISTANCE     333.0f      // max distance for visible object show, limited in 333 yards
 #define DEFAULT_VISIBILITY_DISTANCE 90.0f       // default visible distance, 90 yards on continents
 #define DEFAULT_VISIBILITY_INSTANCE 120.0f      // default visible distance in instances, 120 yards
@@ -319,6 +320,8 @@ class Object
         const Player* ToPlayer() const { if (GetTypeId() == TYPEID_PLAYER)  return (const Player*)((Player*)this); else return NULL;  }
         Creature* ToCreature(){ if (GetTypeId() == TYPEID_UNIT) return reinterpret_cast<Creature*>(this); else return NULL; }
         const Creature* ToCreature() const {if (GetTypeId() == TYPEID_UNIT) return (const Creature*)((Creature*)this); else return NULL; }
+        Unit* ToUnit(){ if (GetTypeId() == TYPEID_UNIT || GetTypeId() == TYPEID_PLAYER) return reinterpret_cast<Unit*>(this); else return NULL; }
+        const Unit* ToUnit() const {if (GetTypeId() == TYPEID_UNIT || GetTypeId() == TYPEID_PLAYER) return (const Unit*)((Unit*)this); else return NULL; }
 
     protected:
 
@@ -558,8 +561,8 @@ class WorldObject : public Object, public WorldLocation
             GetPosition(&pos);
             MovePosition(pos, dist, angle);
         }
-       void MovePositionToFirstCollision(Position &pos, float dist, float angle);
-       void GetFirstCollisionPosition(Position &pos, float dist, float angle)
+        void MovePositionToFirstCollision(Position &pos, float dist, float angle);
+        void GetFirstCollisionPosition(Position &pos, float dist, float angle)
         {
                 GetPosition(&pos);
                 MovePositionToFirstCollision(pos, dist, angle);
@@ -589,6 +592,10 @@ class WorldObject : public Object, public WorldLocation
             GetRandomPoint(srcPos, distance, x, y, z);
             pos.Relocate(x, y, z, GetOrientation());
         }
+
+        float GetDistanceSqr(float x, float y, float z) const;
+        bool HasInArc(float arcangle, const Position *pos) const;
+        bool HasInArc(const float arcangle, const float x, const float y) const;
 
         uint32 GetInstanceId() const { return m_InstanceId; }
 
@@ -691,6 +698,11 @@ class WorldObject : public Object, public WorldLocation
 
         // low level function for visibility change code, must be define in all main world object subclasses
         virtual bool isVisibleForInState(Player const* u, bool inVisibleList) const = 0;
+
+        float GetGridActivationRange() const;
+        float GetVisibilityRange() const;
+        float GetSightRange(const WorldObject* target = NULL) const;
+        bool canSeeOrDetect(WorldObject const* obj, bool ignoreStealth = false, bool distanceCheck = false) const;
 
         // Low Level Packets
         void SendPlaySound(uint32 Sound, bool OnlySelf);

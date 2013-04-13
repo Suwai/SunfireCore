@@ -5201,6 +5201,14 @@ void Spell::EffectScriptEffect(SpellEffIndex effIndex)
                     cTarget->RemoveCorpse();
                     break;
                 }
+                case 33676:                                 // Incite Chaos
+                {
+                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+                        return;
+
+                    m_caster->CastSpell(unitTarget, 33684, true);
+                    return;
+                }
                 // Gruul's shatter
                 case 33654:
                 {

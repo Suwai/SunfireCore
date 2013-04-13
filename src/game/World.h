@@ -238,13 +238,14 @@ enum WorldConfigs
     CONFIG_AUTOBROADCAST_TIMER,
     CONFIG_AUTOBROADCAST_ENABLED,
     CONFIG_AUTOBROADCAST_CENTER,
+	CONFIG_FLOAT_RATE_PVP_RANK_EXTRA_HONOR,
 	CONFIG_WARDEN_ENABLED,
     CONFIG_WARDEN_ACTION,
     CONFIG_WARDEN_BAN_DURATION,
     CONFIG_WARDEN_NUM_CHECKS,
     CONFIG_WARDEN_CLIENT_RESPONSE_DELAY,	
     CONFIG_WARDEN_CLIENT_CHECK_HOLDOFF,
-	CONFIG_FLOAT_RATE_PVP_RANK_EXTRA_HONOR,
+    CONFIG_BOOL_MMAP_ENABLED,
     CONFIG_VALUE_COUNT
 };
 
@@ -309,6 +310,7 @@ enum Rates
     RATE_DURABILITY_LOSS_BLOCK,
     MAX_RATES
 };
+
 enum HonorKillPvPRank
 {
     HKRANK00,
@@ -328,6 +330,7 @@ enum HonorKillPvPRank
     HKRANK14,
     HKRANKMAX
 };
+
 // Type of server
 enum RealmType
 {
@@ -524,7 +527,7 @@ class World
         void SendZoneText(uint32 zone, const char *text, WorldSession *self = 0, uint32 team = 0);
         void SendServerMessage(ServerMessageType type, const char *text = "", Player* player = NULL);
 
-		uint32 pvp_ranks[HKRANKMAX];
+        uint32 pvp_ranks[HKRANKMAX];
 
         // Are we in the middle of a shutdown?
         bool IsShutdowning() const { return m_ShutdownTimer > 0; }

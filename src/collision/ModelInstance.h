@@ -61,6 +61,11 @@ namespace VMAP
             G3D::Matrix3 iInvRot;
             float iInvScale;
             WorldModel *iModel;
+
+#ifdef MMAP_GENERATOR
+        public:
+            WorldModel* const getWorldModel();
+#endif
     };
 } // namespace VMAP
 

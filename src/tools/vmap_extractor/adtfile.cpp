@@ -117,9 +117,17 @@ bool ADTFile::init(uint32 map_num, uint32 tileX, uint32 tileY)
                     p=p+strlen(p)+1;
                     ModelInstansName[t++] = s;
 
-                    // replace .mdx -> .m2
-                    path.erase(path.length()-2,2);
-                    path.append("2");
+                    // < 3.1.0 ADT MMDX section store filename.mdx filenames for corresponded .m2 file
+                    std::string ext3 = path.size() >= 4 ? path.substr(path.size()-4,4) : "";
+                    std::transform( ext3.begin(), ext3.end(), ext3.begin(), ::tolower );
+                    if(ext3 == ".mdx")
+                    {
+                        // replace .mdx -> .m2
+                        path.erase(path.length()-2,2);
+                        path.append("2");
+                    }
+                    // >= 3.1.0 ADT MMDX section store filename.m2 filenames for corresponded .m2 file
+                    // nothing do
 
                     char szLocalFile[1024];
                     snprintf(szLocalFile, 1024, "%s/%s", szWorkDirWmo, s);
@@ -157,6 +165,7 @@ bool ADTFile::init(uint32 map_num, uint32 tileX, uint32 tileY)
                 delete[] buf;
             }
         }
+        //======================
         else if (!strcmp(fourcc,"MDDF"))
         {
             if (size)
@@ -185,6 +194,7 @@ bool ADTFile::init(uint32 map_num, uint32 tileX, uint32 tileY)
                 delete[] WmoInstansName;
             }
         }
+        //======================
         ADT.seek(nextpos);
     }
     ADT.close();
@@ -196,4 +206,3 @@ ADTFile::~ADTFile()
 {
     ADT.close();
 }
-

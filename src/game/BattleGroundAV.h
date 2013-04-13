@@ -1501,7 +1501,7 @@ class BattleGroundAV : public BattleGround
 
         /*general */
         Creature* AddAVCreature(uint32 cinfoid, uint32 type);
-        uint16 GetBonusHonor(uint8 kills); //TODO remove this when mangos handles this right
+        uint16 GetBonusHonor(uint8 kills); //TODO remove this when BC handles this right
 
         /*variables */
         int32 m_Team_Scores[BG_TEAMS_COUNT];

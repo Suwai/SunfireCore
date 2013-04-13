@@ -15,6 +15,7 @@
 #include "ObjectAccessor.h"
 #include "MapManager.h"
 #include "ObjectMgr.h"
+#include "MoveMap.h"
 
 #define DEFAULT_GRID_EXPIRY     300
 #define MAX_GRID_LOAD_TIME      50
@@ -37,6 +38,12 @@ Map::~Map()
 
     if (!m_scriptSchedule.empty())
         sWorld.DecreaseScheduledScriptCount(m_scriptSchedule.size());
+
+    // unload instance specific navigation data
+    MMAP::MMapFactory::createOrGetMMapManager()->unloadMapInstance(m_parentMap->GetId(), GetInstanceId());
+
+    MMAP::MMapFactory::createOrGetMMapManager()->unloadMap(GetId());
+        sWorld.DecreaseScheduledScriptCount(m_scriptSchedule.size());
 }
 
 bool Map::ExistMap(uint32 mapid,int gx,int gy)
@@ -55,7 +62,7 @@ bool Map::ExistMap(uint32 mapid,int gx,int gy)
         map_fileheader header;
         if (fread(&header, sizeof(header), 1, pf) == 1)
         {
-            if (header.mapMagic != uint32(MAP_MAGIC) || header.versionMagic != uint32(MAP_VERSION_MAGIC))
+            if (header.mapMagic != *((uint32 const*)(MAP_MAGIC)) || header.versionMagic != *((uint32 const*)(MAP_VERSION_MAGIC)))
                 sLog.outError("Map file '%s' is from an incompatible client version. Please recreate using the mapextractor.",tmp);
             else
                 ret = true;
@@ -140,7 +147,7 @@ void Map::LoadMap(int gx,int gy, bool reload)
     GridMaps[gx][gy] = new GridMap();
     if (!GridMaps[gx][gy]->loadData(tmp))
     {
-        sLog.outError("Error loading map file: \n %s\n", tmp);
+        sLog.outError("Error loading map file: %s grid[%i,%i]\n", tmp, gx, gy);
     }
     delete[] tmp;
 }
@@ -148,8 +155,14 @@ void Map::LoadMap(int gx,int gy, bool reload)
 void Map::LoadMapAndVMap(int gx,int gy)
 {
     LoadMap(gx,gy);
-    if (i_InstanceId == 0)
-        LoadVMap(gx, gy);                                   // Only load the data for the base map
+
+    if (i_InstanceId == 0) // Only load the data for the base map
+    {
+        LoadVMap(gx, gy);
+
+        // load navmesh
+        MMAP::MMapFactory::createOrGetMMapManager()->loadMap(GetId(), gx, gy);
+    }
 }
 
 void Map::InitStateMachine()
@@ -523,16 +536,43 @@ bool Map::loaded(const GridPair &p) const
     return (getNGrid(p.x_coord, p.y_coord) && isGridObjectDataLoaded(p.x_coord, p.y_coord));
 }
 
+void Map::VisitNearbyCellsOf(WorldObject* obj, TypeContainerVisitor<BlizzLike::ObjectUpdater, GridTypeMapContainer> &gridVisitor, TypeContainerVisitor<BlizzLike::ObjectUpdater, WorldTypeMapContainer> &worldVisitor)
+{
+    CellPair standing_cell(BlizzLike::ComputeCellPair(obj->GetPositionX(), obj->GetPositionY()));
+
+    // Check for correctness of standing_cell, it also avoids problems with update_cell
+    if (standing_cell.x_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP || standing_cell.y_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP)
+        return;
+
+    // the overloaded operators handle range checking
+    // so there's no need for range checking inside the loop
+    CellPair begin_cell(standing_cell), end_cell(standing_cell);
+    //lets update mobs/objects in ALL visible cells around object!
+    CellArea area = Cell::CalculateCellArea(*obj, obj->GetGridActivationRange());
+    area.ResizeBorders(begin_cell, end_cell);
+
+    for (uint32 x = begin_cell.x_coord; x <= end_cell.x_coord; ++x)
+    {
+        for (uint32 y = begin_cell.y_coord; y <= end_cell.y_coord; ++y)
+        {
+            // marked cells are those that have been visited
+            // don't visit the same cell twice
+            uint32 cell_id = (y * TOTAL_NUMBER_OF_CELLS_PER_MAP) + x;
+            if (isCellMarked(cell_id))
+                continue;
+
+            markCell(cell_id);
+            CellPair pair(x,y);
+            Cell cell(pair);
+            cell.data.Part.reserved = CENTER_DISTRICT;
+            cell.Visit(pair, gridVisitor,  *this);
+            cell.Visit(pair, worldVisitor, *this);
+        }
+    }
+}
+
 void Map::Update(const uint32 &t_diff)
 {
-    // update players at tick
-    for (m_mapRefIter = m_mapRefManager.begin(); m_mapRefIter != m_mapRefManager.end(); ++m_mapRefIter)
-    {
-        Player* plr = m_mapRefIter->getSource();
-        if (plr && plr->IsInWorld())
-            plr->Update(t_diff);
-    }
-
     // update active cells around players and active objects
     resetMarkedCells();
 
@@ -551,38 +591,13 @@ void Map::Update(const uint32 &t_diff)
         if (!plr->IsInWorld())
             continue;
 
-        CellPair standing_cell(BlizzLike::ComputeCellPair(plr->GetPositionX(), plr->GetPositionY()));
-
-        // Check for correctness of standing_cell, it also avoids problems with update_cell
-        if (standing_cell.x_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP || standing_cell.y_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP)
-            continue;
-
-        // the overloaded operators handle range checking
-        // so ther's no need for range checking inside the loop
-        CellPair begin_cell(standing_cell), end_cell(standing_cell);
-        //lets update mobs/objects in ALL visible cells around player!
-        CellArea area = Cell::CalculateCellArea(*plr, GetVisibilityDistance());
-        area.ResizeBorders(begin_cell, end_cell);
-
-        for (uint32 x = begin_cell.x_coord; x <= end_cell.x_coord; ++x)
-        {
-            for (uint32 y = begin_cell.y_coord; y <= end_cell.y_coord; ++y)
-            {
-                // marked cells are those that have been visited
-                // don't visit the same cell twice
-                uint32 cell_id = (y * TOTAL_NUMBER_OF_CELLS_PER_MAP) + x;
-                if (!isCellMarked(cell_id))
-                {
-                    markCell(cell_id);
-                    CellPair pair(x,y);
-                    Cell cell(pair);
-                    cell.data.Part.reserved = CENTER_DISTRICT;
-                    //cell.SetNoCreate();
-                    cell.Visit(pair, grid_object_update,  *this);
-                    cell.Visit(pair, world_object_update, *this);
-                }
-            }
-        }
+        // update players at tick
+        plr->Update(t_diff);
+        //TODO: implement thread safe packets from BC?  Does this cause logout?
+        //WorldSession * pSession = plr->GetSession();
+        //MapSessionFilter updater(pSession);
+        //pSession->Update(t_diff, updater);
+        VisitNearbyCellsOf(plr, grid_object_update, world_object_update);
     }
 
     // non-player active objects
@@ -600,38 +615,9 @@ void Map::Update(const uint32 &t_diff)
             if (!obj->IsInWorld())
                 continue;
 
-            CellPair standing_cell(BlizzLike::ComputeCellPair(obj->GetPositionX(), obj->GetPositionY()));
-
-            // Check for correctness of standing_cell, it also avoids problems with update_cell
-            if (standing_cell.x_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP || standing_cell.y_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP)
-                continue;
-
-            // the overloaded operators handle range checking
-            // so ther's no need for range checking inside the loop
-            CellPair begin_cell(standing_cell), end_cell(standing_cell);
-            begin_cell << 1; begin_cell -= 1;               // upper left
-            end_cell >> 1; end_cell += 1;                   // lower right
-
-            for (uint32 x = begin_cell.x_coord; x <= end_cell.x_coord; ++x)
-            {
-                for (uint32 y = begin_cell.y_coord; y <= end_cell.y_coord; ++y)
-                {
-                    // marked cells are those that have been visited
-                    // don't visit the same cell twice
-                    uint32 cell_id = (y * TOTAL_NUMBER_OF_CELLS_PER_MAP) + x;
-                    if (!isCellMarked(cell_id))
-                    {
-                        markCell(cell_id);
-                        CellPair pair(x,y);
-                        Cell cell(pair);
-                        cell.data.Part.reserved = CENTER_DISTRICT;
-                        //cell.SetNoCreate();
-                        cell.Visit(pair, grid_object_update,  *this);
-                        cell.Visit(pair, world_object_update, *this);
-                    }
-                }
+            VisitNearbyCellsOf(obj, grid_object_update, world_object_update);
             }
-        }
+
     }
 
     // Process necessary scripts
@@ -836,7 +822,7 @@ Map::PlayerRelocation(Player* player, float x, float y, float z, float orientati
 }
 
 void
-Map::CreatureRelocation(Creature* creature, float x, float y, float z, float ang)
+Map::CreatureRelocation(Creature* creature, float x, float y, float z, float ang, bool respawnRelocationOnFail)
 {
     ASSERT(CheckGridIntegrity(creature,false));
 
@@ -844,6 +830,9 @@ Map::CreatureRelocation(Creature* creature, float x, float y, float z, float ang
 
     CellPair new_val = BlizzLike::ComputeCellPair(x, y);
     Cell new_cell(new_val);
+
+    if (!respawnRelocationOnFail && !getNGrid(new_cell.GridX(), new_cell.GridY()))
+        return;
 
     // delay creature move for grid/cell to grid/cell moves
     if (old_cell.DiffCell(new_cell) || old_cell.DiffGrid(new_cell))
@@ -1059,6 +1048,7 @@ bool Map::UnloadGrid(const uint32 &x, const uint32 &y, bool unloadAll)
                 delete GridMaps[gx][gy];
             }
             VMAP::VMapFactory::createOrGetVMapManager()->unloadMap(GetId(), gx, gy);
+            MMAP::MMapFactory::createOrGetMMapManager()->unloadMap(GetId(), gx, gy);
         }
         else
             ((MapInstanced*)m_parentMap)->RemoveGridMapReference(GridPair(gx, gy));
@@ -1146,7 +1136,7 @@ bool GridMap::loadData(char *filename)
         return false;
     }
 
-    if (header.mapMagic == uint32(MAP_MAGIC) && header.versionMagic == uint32(MAP_VERSION_MAGIC))
+    if (header.mapMagic == *((uint32 const*)(MAP_MAGIC)) && header.versionMagic == *((uint32 const*)(MAP_VERSION_MAGIC)))
     {
         // loadup area data
         if (header.areaMapOffset && !loadAreaData(in, header.areaMapOffset, header.areaMapSize))
@@ -1196,9 +1186,13 @@ bool GridMap::loadAreaData(FILE *in, uint32 offset, uint32 /*size*/)
 {
     map_areaHeader header;
     fseek(in, offset, SEEK_SET);
+    fread(&header, sizeof(header), 1, in);
 
-    if (fread(&header, sizeof(header), 1, in) != 1 || header.fourcc != uint32(MAP_AREA_MAGIC))
+    if (header.fourcc != *((uint32 const*)(MAP_AREA_MAGIC)))
+    {
+        sLog.outError("Error reading header. offset: %u\n", offset);
         return false;
+    }
 
     m_gridArea = header.gridArea;
     if (!(header.flags & MAP_AREA_NO_AREA))
@@ -1214,8 +1208,9 @@ bool GridMap::loadHeightData(FILE *in, uint32 offset, uint32 /*size*/)
 {
     map_heightHeader header;
     fseek(in, offset, SEEK_SET);
+    fread(&header, sizeof(header), 1, in);
 
-    if (fread(&header, sizeof(header), 1, in) != 1 || header.fourcc != uint32(MAP_HEIGHT_MAGIC))
+    if (header.fourcc != *((uint32 const*)(MAP_HEIGHT_MAGIC)))
         return false;
 
     m_gridHeight = header.gridHeight;
@@ -1260,8 +1255,9 @@ bool  GridMap::loadLiquidData(FILE *in, uint32 offset, uint32 /*size*/)
 {
     map_liquidHeader header;
     fseek(in, offset, SEEK_SET);
+    fread(&header, sizeof(header), 1, in);
 
-    if (fread(&header, sizeof(header), 1, in) != 1 || header.fourcc != uint32(MAP_LIQUID_MAGIC))
+    if (header.fourcc != *((uint32 const*)(MAP_LIQUID_MAGIC)))
         return false;
 
     m_liquidType   = header.liquidType;
@@ -2152,7 +2148,7 @@ bool Map::ActiveObjectsNearGrid(uint32 x, uint32 y) const
     CellPair cell_max(cell_min.x_coord + MAX_NUMBER_OF_CELLS, cell_min.y_coord+MAX_NUMBER_OF_CELLS);
 
     //we must find visible range in cells so we unload only non-visible cells...
-    float viewDist = GetVisibilityDistance();
+    float viewDist = GetVisibilityRange();
     int cell_range = (int)ceilf(viewDist / SIZE_OF_GRID_CELL) + 1;
 
     cell_min << cell_range;
@@ -2285,8 +2281,7 @@ bool InstanceMap::CanEnter(Player* player)
     }
 
     // cannot enter while an encounter in the instance is in progress
-    Group *pGroup = player->GetGroup();
-	if (!player->isGameMaster() && pGroup && pGroup->InCombatToInstance(GetInstanceId()) && player->GetMapId() != GetId())
+    if (!player->isGameMaster() && GetInstanceData() && GetInstanceData()->IsEncounterInProgress() && player->GetMapId() != GetId())
     {
         player->SendTransferAborted(GetId(), TRANSFER_ABORT_ZONE_IN_COMBAT);
         return false;
@@ -2663,4 +2658,3 @@ void Map::UpdateIteratorBack(Player* player)
     if (m_mapRefIter == player->GetMapRef())
         m_mapRefIter = m_mapRefIter->nocheck_prev();
 }
-

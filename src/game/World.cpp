@@ -32,6 +32,7 @@
 #include "AuctionHouseBot.h"
 #include "WaypointMovementGenerator.h"
 #include "VMapFactory.h"
+#include "MoveMap.h"
 #include "GameEventMgr.h"
 #include "PoolHandler.h"
 #include "Database/DatabaseImpl.h"
@@ -47,7 +48,6 @@
 #include "CreatureEventAIMgr.h"
 #include "ScriptMgr.h"
 #include "ProgressBar.h"
-#include "WardenDataStorage.h"
 
 INSTANTIATE_SINGLETON_1(World);
 
@@ -113,6 +113,7 @@ World::~World()
         delete command;
 
     VMAP::VMapFactory::clear();
+    MMAP::MMapFactory::clear();
 
     delete m_resultQueue;
 
@@ -1022,6 +1023,7 @@ void World::LoadConfigSettings(bool reload)
     bool enableLOS = sConfig.GetBoolDefault("vmap.enableLOS", true);
     bool enableHeight = sConfig.GetBoolDefault("vmap.enableHeight", true);
     bool enablePetLOS = sConfig.GetBoolDefault("vmap.petLOS", true);
+    std::string ignoreMapIds = sConfig.GetStringDefault("vmap.ignoreMapIds", "");
     std::string ignoreSpellIds = sConfig.GetStringDefault("vmap.ignoreSpellIds", "");
 
     if (!enableHeight)
@@ -1029,6 +1031,7 @@ void World::LoadConfigSettings(bool reload)
 
     VMAP::VMapFactory::createOrGetVMapManager()->setEnableLineOfSightCalc(enableLOS);
     VMAP::VMapFactory::createOrGetVMapManager()->setEnableHeightCalc(enableHeight);
+    VMAP::VMapFactory::createOrGetVMapManager()->preventMapsFromBeingUsed(ignoreMapIds.c_str());
     VMAP::VMapFactory::preventSpellsFromBeingTestedForLoS(ignoreSpellIds.c_str());
     sLog.outString("WORLD: VMap support included. LineOfSight:%i, getHeight:%i, indoorCheck:%i, PetLOS:%i", enableLOS, enableHeight, enableIndoor, enablePetLOS);
     sLog.outString("WORLD: VMap data directory is: %svmaps",m_dataPath.c_str());
@@ -1090,26 +1093,20 @@ void World::LoadConfigSettings(bool reload)
     m_configs[CONFIG_CHATLOG_PUBLIC] = sConfig.GetBoolDefault("ChatLogs.Public", false);
     m_configs[CONFIG_CHATLOG_ADDON] = sConfig.GetBoolDefault("ChatLogs.Addon", false);
     m_configs[CONFIG_CHATLOG_BGROUND] = sConfig.GetBoolDefault("ChatLogs.BattleGround", false);
-    // warden
+
+	// warden
     m_configs[CONFIG_WARDEN_ENABLED] = sConfig.GetBoolDefault("Warden.Enabled", true);
     m_configs[CONFIG_WARDEN_ACTION] = sConfig.GetIntDefault("Warden.Action", 1);
     m_configs[CONFIG_WARDEN_BAN_DURATION] = sConfig.GetIntDefault("Warden.BanDuration", 86400);
     m_configs[CONFIG_WARDEN_NUM_CHECKS] = sConfig.GetIntDefault("Warden.NumChecks", 3);
     m_configs[CONFIG_WARDEN_CLIENT_RESPONSE_DELAY] = sConfig.GetIntDefault("Warden.ClientResponseDelay", 600);	
     m_configs[CONFIG_WARDEN_CLIENT_CHECK_HOLDOFF] = sConfig.GetIntDefault("Warden.ClientCheckHoldOff", 5);
-    // PvP Ranks
-    m_configs[CONFIG_FLOAT_RATE_PVP_RANK_EXTRA_HONOR] = sConfig.GetIntDefault("PvPSystem.Rank.Rate.ExtraHonor", 1);
-    std::string s_pvp_ranks = sConfig.GetStringDefault("PvPSystem.Rank.HKPerRank", "10,50,100,200,450,750,1300,2000,3500,6000,9500,15000,21000,30000");
-    char *c_pvp_ranks = const_cast<char*>(s_pvp_ranks.c_str());
-    for (int i = 0; i !=HKRANKMAX; i++)
-    {
-        if(i==0)
-            pvp_ranks[0] = 0;
-        else if(i==1)
-            pvp_ranks[1] = atoi(strtok (c_pvp_ranks, ","));
-        else
-            pvp_ranks[i] = atoi(strtok (NULL, ","));
-    }
+
+    // mmaps
+    m_configs[CONFIG_BOOL_MMAP_ENABLED] = sConfig.GetBoolDefault("mmap.enable", true);
+    std::string ignoreMMapIds = sConfig.GetStringDefault("mmap.ignoreMapIds", "");
+    MMAP::MMapFactory::preventPathfindingOnMaps(ignoreMMapIds.c_str());
+    sLog.outString("WORLD: mmap pathfinding %sabled", getConfig(CONFIG_BOOL_MMAP_ENABLED) ? "en" : "dis");
 }
 
 // Initialize the World
@@ -1117,6 +1114,9 @@ void World::SetInitialWorldSettings()
 {
     // Initialize the random number generator
     srand((unsigned int)time(NULL));
+
+    // Initialize detour memory management
+    dtAllocSetCustom(dtCustomAlloc, dtCustomFree);
 
     // Initialize config settings
     LoadConfigSettings();
@@ -1501,10 +1501,6 @@ void World::SetInitialWorldSettings()
     sLog.outString("Starting Game Event system...");
     uint32 nextGameEvent = gameeventmgr.Initialize();
     m_timers[WUPDATE_EVENTS].SetInterval(nextGameEvent);    //depend on next event
-
-    // Load Warden Data
-    sLog.outString("Loading Warden Data..." );
-    WardenDataStorage.Init();
 
     // Initialize Battlegrounds
     sLog.outString("Starting BattleGround System");

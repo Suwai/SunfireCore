@@ -20,6 +20,7 @@
 
 #include <bitset>
 #include <list>
+#include <set>
 
 class Unit;
 class WorldPacket;
@@ -36,6 +37,7 @@ struct ScriptInfo;
 struct ScriptAction;
 struct Position;
 class BattleGround;
+namespace BlizzLike { struct ObjectUpdater; }
 
 struct ScriptAction
 {
@@ -48,22 +50,25 @@ struct ScriptAction
 //******************************************
 // Map file format defines
 //******************************************
-#define MAP_MAGIC             0x5350414D // SPAM
-#define MAP_VERSION_MAGIC     0x352E3077 // 5.0w
-#define MAP_AREA_MAGIC        0x41455241 // AERA
-#define MAP_HEIGHT_MAGIC      0x5447484D // TGHM
-#define MAP_LIQUID_MAGIC      0x51494C4D // QILM
+static char const* MAP_MAGIC         = "MAPS";
+static char const* MAP_VERSION_MAGIC = "v1.2";
+static char const* MAP_AREA_MAGIC    = "AREA";
+static char const* MAP_HEIGHT_MAGIC  = "MHGT";
+static char const* MAP_LIQUID_MAGIC  = "MLIQ";
 
 struct map_fileheader
 {
     uint32 mapMagic;
     uint32 versionMagic;
+    uint32 buildMagic;
     uint32 areaMapOffset;
     uint32 areaMapSize;
     uint32 heightMapOffset;
     uint32 heightMapSize;
     uint32 liquidMapOffset;
     uint32 liquidMapSize;
+    uint32 holesOffset;
+    uint32 holesSize;
 };
 
 #define MAP_AREA_NO_AREA      0x0001
@@ -255,7 +260,10 @@ class Map : public GridRefManager<NGridType>, public BlizzLike::ObjectLevelLocka
         template<class T> void Add(T *);
         template<class T> void Remove(T *, bool);
 
+        void VisitNearbyCellsOf(WorldObject* obj, TypeContainerVisitor<BlizzLike::ObjectUpdater, GridTypeMapContainer> &gridVisitor, TypeContainerVisitor<BlizzLike::ObjectUpdater, WorldTypeMapContainer> &worldVisitor);
         virtual void Update(const uint32&);
+
+        float GetVisibilityRange() const { return m_VisibleDistance; }
 
         /*
         void MessageBroadcast(Player*, WorldPacket*, bool to_self);
@@ -269,7 +277,7 @@ class Map : public GridRefManager<NGridType>, public BlizzLike::ObjectLevelLocka
         virtual void InitVisibilityDistance();
 
         void PlayerRelocation(Player*, float x, float y, float z, float orientation);
-        void CreatureRelocation(Creature* creature, float x, float y, float z, float ang);
+        void CreatureRelocation(Creature* creature, float x, float y, float z, float ang, bool respawnRelocationOnFail = true);
 
         template<class T, class CONTAINER> void Visit(const Cell& cell, TypeContainerVisitor<T, CONTAINER> &visitor);
 

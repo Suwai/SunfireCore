@@ -3,18 +3,20 @@ color 0b
 :panel
 cls
 echo.
-echo //////////////////////////////////////////////
-echo /// BlizzLikeCore dbc/maps/vmaps extractor ///
-echo //////////////////////////////////////////////
+echo ////////////////////////////////////////////////////
+echo /// BlizzLikeCore dbc/maps/vmaps/mmaps extractor ///
+echo ////////////////////////////////////////////////////
 echo.
 echo Extract dbc/maps [1]
 echo Extract vmaps	 [2]
+echo Extract mmaps	 [3]
 echo Exit		 [0]
 echo.
 set /p opc=what is your option? 
 cls
 if "%opc%" == "1" goto 1_extract_dbc_maps
 if "%opc%" == "2" goto 2_extract_vmaps
+if "%opc%" == "3" goto 3_extract_mmaps
 if "%opc%" == "0" goto exit
 goto panel
 :1_extract_dbc_maps
@@ -49,6 +51,23 @@ echo.
 echo.
 echo Process done! 
 echo Copy vmaps folder to the core main directory.
+echo Press any key to panel . . .
+pause>nul
+goto panel)
+echo.
+echo.
+echo Process finalized with errors.
+echo Press any key to panel . . .
+pause>nul
+goto panel
+:3_extract_mmaps
+md mmaps
+movements_extractor.exe
+if %ERRORLEVEL% == 0 (cls
+echo.
+echo.
+echo Process done!
+echo Copy mmaps folder to the core main directory.
 echo Press any key to panel . . .
 pause>nul
 goto panel)
