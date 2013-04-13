@@ -53,7 +53,7 @@ namespace VMAP
         if (!iModel)
         {
 #ifdef VMAP_DEBUG
-            std::cout << "<object not loaded>\n";
+            DEBUG_LOG("<object not loaded>");
 #endif
             return;
         }
@@ -87,7 +87,7 @@ namespace VMAP
         if (!iModel)
         {
 #ifdef VMAP_DEBUG
-            std::cout << "<object not loaded>\n";
+            DEBUG_LOG("<object not loaded>");
 #endif
             return false;
         }

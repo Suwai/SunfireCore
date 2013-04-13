@@ -359,6 +359,7 @@ class Spell
         uint8 CheckRange(bool strict);
         uint8 CheckPower();
         uint8 CheckCasterAuras() const;
+        bool CheckCharge();
 
         int32 CalculateDamage(uint8 i, Unit* target) { return m_caster->CalculateSpellDamage(m_spellInfo,i,m_currentBasePoints[i],target); }
 

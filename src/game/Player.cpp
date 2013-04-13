@@ -15925,6 +15925,9 @@ void Player::_LoadSpells(QueryResult_AutoPtr result)
     for (PlayerSpellMap::iterator itr = m_spells.begin(); itr != m_spells.end(); ++itr)
         delete itr->second;
 
+	 m_spells.clear();
+
+
     //QueryResult_AutoPtr result = CharacterDatabase.PQuery("SELECT spell,active,disabled FROM character_spell WHERE guid = '%u'",GetGUIDLow());
 
     if (result)
@@ -18114,8 +18117,8 @@ void Player::ContinueTaxiFlight()
 
     for (uint32 i = 1; i < nodeList.size(); ++i)
     {
-        TaxiPathNode const& node = nodeList[i];
-        TaxiPathNode const& prevNode = nodeList[i-1];
+        TaxiPathNodeEntry const& node = nodeList[i];
+        TaxiPathNodeEntry const& prevNode = nodeList[i-1];
 
         // skip nodes at another map
         if (node.mapid != GetMapId())

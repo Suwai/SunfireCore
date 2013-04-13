@@ -196,6 +196,12 @@ void WorldSession::HandleTaxiNextDestinationOpcode(WorldPacket& recv_data)
 
     TaxiNodesEntry const* curDestNode = sTaxiNodesStore.LookupEntry(curDest);
 
+    if (curDestNode && curDestNode->map_id == GetPlayer()->GetMapId())
+    {
+        while(GetPlayer()->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLIGHT_MOTION_TYPE)
+            GetPlayer()->GetMotionMaster()->MovementExpired(false);
+    }
+
     // far teleport case
     if (curDestNode && curDestNode->map_id != GetPlayer()->GetMapId())
     {
@@ -205,7 +211,7 @@ void WorldSession::HandleTaxiNextDestinationOpcode(WorldPacket& recv_data)
             FlightPathMovementGenerator* flight = (FlightPathMovementGenerator*)(GetPlayer()->GetMotionMaster()->top());
 
             flight->SetCurrentNodeAfterTeleport();
-            Path::PathNode const& node = flight->GetPath()[flight->GetCurrentNode()];
+            TaxiPathNodeEntry const& node = flight->GetPath()[flight->GetCurrentNode()];
             flight->SkipCurrentNode();
 
             GetPlayer()->TeleportTo(curDestNode->map_id,node.x,node.y,node.z,GetPlayer()->GetOrientation());

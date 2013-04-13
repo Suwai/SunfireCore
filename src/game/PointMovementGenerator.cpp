@@ -9,6 +9,7 @@
 #include "MapManager.h"
 #include "DestinationHolderImp.h"
 #include "World.h"
+#include "PathFinder.h"
 
 //----- Point Movement Generator
 template<class T>
@@ -16,7 +17,22 @@ void PointMovementGenerator<T>::Initialize(T &unit)
 {
     unit.StopMoving();
     Traveller<T> traveller(unit);
-    i_destinationHolder.SetDestination(traveller,i_x,i_y,i_z);
+    i_destinationHolder.SetDestination(traveller, i_x, i_y, i_z, !m_usePathfinding);
+
+    if (m_usePathfinding)
+    {
+        PathInfo path(&unit, i_x, i_y, i_z);
+        PointPath pointPath = path.getFullPath();
+
+        float speed = traveller.Speed() * 0.001f; // in ms
+        uint32 traveltime = uint32(pointPath.GetTotalLength() / speed);
+        if (unit.GetTypeId() != TYPEID_UNIT)
+            unit.SetUnitMovementFlags(SPLINEFLAG_WALKMODE);
+        unit.SendMonsterMoveByPath(pointPath, 1, pointPath.size(), traveltime);
+
+        //PathNode p = pointPath[pointPath.size()-1];
+        //i_destinationHolder.SetDestination(traveller, p.x, p.y, p.z, false);
+    }
 }
 
 template<class T>

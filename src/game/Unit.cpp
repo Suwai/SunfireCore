@@ -36,6 +36,7 @@
 #include "PassiveAI.h"
 #include "Traveller.h"
 #include "TemporarySummon.h"
+#include "PathFinder.h"
 #include "ScriptMgr.h"
 
 #include <math.h>
@@ -343,7 +344,7 @@ void Unit::Update(uint32 p_time)
     _UpdateSpells(p_time);
 
     // update combat timer only for players and pets
-    if (isInCombat() && (GetTypeId() == TYPEID_PLAYER || ToCreature()->isPet() || ToCreature()->isCharmed()))
+    if (isInCombat() && GetCharmerOrOwnerPlayerOrPlayerItself())
     {
         // Check UNIT_STAT_MELEE_ATTACKING or UNIT_STAT_CHASE (without UNIT_STAT_FOLLOW in this case) so pets can reach far away
         // targets without stopping half way there and running off.
@@ -476,11 +477,22 @@ void Unit::SendMonsterMove(float NewPosX, float NewPosY, float NewPosZ, uint32 M
         SendMessageToSet(&data, true);
 }
 
-void Unit::SendMonsterMoveByPath(Path const& path, uint32 start, uint32 end)
+template<typename Elem, typename Node>
+void Unit::SendMonsterMoveByPath(Path<Elem, Node> const& path, uint32 start, uint32 end, uint32 traveltime)
 {
-    uint32 traveltime = uint32(path.GetTotalLength(start, end) * 32);
-
     uint32 pathSize = end - start;
+
+    if (pathSize < 1)
+    {
+        SendMonsterMove(GetPositionX(), GetPositionY(), GetPositionZ(), 0);
+        return;
+    }
+
+    if (pathSize == 1)
+    {
+        SendMonsterMove(path[start].x, path[start].y, path[start].z, traveltime);
+        return;
+    }
 
     WorldPacket data(SMSG_MONSTER_MOVE, (GetPackGUID().size()+4+4+4+4+1+4+4+4+pathSize*4*3));
     data << GetPackGUID();
@@ -492,7 +504,36 @@ void Unit::SendMonsterMoveByPath(Path const& path, uint32 start, uint32 end)
     data << uint32(((GetUnitMovementFlags() & MOVEFLAG_LEVITATING) || isInFlight())? (SPLINEFLAG_FLYING|SPLINEFLAG_WALKMODE) : SPLINEFLAG_WALKMODE);
     data << uint32(traveltime);
     data << uint32(pathSize);
-    data.append((char*)path.GetNodes(start), pathSize * 4 * 3);
+
+    if (GetUnitMovementFlags() & UnitFlags(SPLINEFLAG_FLYING))
+    {
+        // sending a taxi flight path
+        for (uint32 i = start; i < end; ++i)
+        {
+            data << float(path[i].x);
+            data << float(path[i].y);
+            data << float(path[i].z);
+        }
+    }
+    else
+    {
+        // sending a series of points
+
+        // destination
+        data << path[end-1].x;
+        data << path[end-1].y;
+        data << path[end-1].z;
+
+        // all other points are relative to the center of the path
+        float mid_X = (GetPositionX() + path[end-1].x) * 0.5f;
+        float mid_Y = (GetPositionY() + path[end-1].y) * 0.5f;
+        float mid_Z = (GetPositionZ() + path[end-1].z) * 0.5f;
+
+        for (uint32 i = start; i < end - 1; ++i)
+        {
+            data.appendPackXYZ(mid_X - path[i].x, mid_Y - path[i].y, mid_Z - path[i].z);
+        }
+    }
     SendMessageToSet(&data, true);
 
     addUnitState(UNIT_STAT_MOVE);
@@ -8889,12 +8930,12 @@ bool Unit::canDetectStealthOf(Unit const* target, float distance) const
             return true;
 
     //Visible distance based on stealth value (stealth rank 4 300MOD, 10.5 - 3 = 7.5)
-    float visibleDistance = 26.0f;
+    float visibleDistance = 7.5f;
     //Visible distance is modified by -Level Diff (every level diff = 1.0f in visible distance)
-    visibleDistance += float(getLevel() - getLevelForTarget(target)) * 2.5f - target->GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH) / 5.0f;
+    visibleDistance += float(getLevelForTarget(target)) - target->GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH)/5.0f;
     //-Stealth Mod(positive like Master of Deception) and Stealth Detection(negative like paranoia)
     //based on wowwiki every 5 mod we have 1 more level diff in calculation
-    visibleDistance += GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH_DETECT) / 2.0f - target->GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH_LEVEL) / 2.0f;
+    visibleDistance += (float)(GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH_DETECT) - target->GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH_LEVEL)) / 5.0f;
     visibleDistance = visibleDistance > MAX_PLAYER_STEALTH_DETECT_RANGE ? MAX_PLAYER_STEALTH_DETECT_RANGE : visibleDistance;
 
     return distance < visibleDistance;
@@ -9305,7 +9346,34 @@ Unit* Creature::SelectVictim()
     if (target)
     {
         if (!hasUnitState(UNIT_STAT_STUNNED))
+        {
             SetInFront(target);
+
+            // check if currently selected target is reachable
+            // NOTE: path alrteady generated from AttackStart()
+            if(!GetMotionMaster()->isReachable())
+            {
+                // remove all taunts
+                RemoveSpellsCausingAura(SPELL_AURA_MOD_TAUNT);
+
+                if(m_ThreatManager.getThreatList().size() < 2)
+                {
+                    // only one target in list, we have to evade after timer
+                    // TODO: make timer - inside Creature class
+                    ((Creature*)this)->AI()->EnterEvadeMode();
+                }
+                else
+                {
+                    // remove unreachable target from our threat list
+                    // next iteration we will select next possible target
+                    getHostileRefManager().deleteReference(target);
+                    m_ThreatManager.modifyThreatPercent(target, -101);
+
+                    _removeAttacker(target);
+                }
+                return NULL;
+            }
+        }
         return target;
     }
 
@@ -11575,6 +11643,30 @@ void Unit::NearTeleportTo(float x, float y, float z, float orientation, bool cas
         SendMessageToSet(&data, false);
     }
 }
+
+void Unit::MonsterMoveByPath(float x, float y, float z, uint32 speed, bool forceDest)
+{
+    PathInfo path(this, x, y, z, forceDest);
+    PointPath pointPath = path.getFullPath();
+
+    uint32 traveltime = uint32(pointPath.GetTotalLength() / float(speed));
+    MonsterMoveByPath(pointPath, 1, pointPath.size(), traveltime);
+}
+
+template<typename PathElem, typename PathNode>
+void Unit::MonsterMoveByPath(Path<PathElem,PathNode> const& path, uint32 start, uint32 end, uint32 transitTime)
+{
+    SplineFlags flags = GetTypeId() == TYPEID_PLAYER ? SPLINEFLAG_WALKMODE : SplineFlags(((Creature*)this)->GetUnitMovementFlags());
+    SetUnitMovementFlags(flags);
+    SendMonsterMoveByPath(path, start, end, transitTime);
+}
+
+template void Unit::MonsterMoveByPath<PathNode>(const Path<PathNode> &, uint32, uint32, uint32);
+
+
+
+template void Unit::SendMonsterMoveByPath<PathNode>(const Path<PathNode> &, uint32, uint32, uint32);
+template void Unit::SendMonsterMoveByPath<TaxiPathNodePtr, const TaxiPathNodeEntry>(const Path<TaxiPathNodePtr, const TaxiPathNodeEntry> &, uint32, uint32, uint32);
 
 /*-----------------------blizzlike-----------------------------*/
 

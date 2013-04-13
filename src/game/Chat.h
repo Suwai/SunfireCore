@@ -501,6 +501,13 @@ class ChatHandler
         bool HandleChatSpySetCommand(const char * args);
         bool HandleChatSpyStatusCommand(const char * args);
 
+        bool HandleMmapPathCommand(const char* args);
+        bool HandleMmapLocCommand(const char* args);
+        bool HandleMmapLoadedTilesCommand(const char* args);
+        bool HandleMmapStatsCommand(const char* args);
+        bool HandleMmap(const char* args);
+        bool HandleMmapTestArea(const char* args);
+
         //! Development Commands
         bool HandleSetValue(const char* args);
         bool HandleGetValue(const char* args);

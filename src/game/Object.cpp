@@ -403,7 +403,7 @@ void Object::_BuildMovementUpdate(ByteBuffer * data, uint8 updateFlags) const
                 *data << (float)0;
             }
 
-            Path &path = fmg->GetPath();
+            TaxiPathNodeList& path = const_cast<TaxiPathNodeList&>(fmg->GetPath());
 
             float x, y, z;
             ToPlayer()->GetPosition(x, y, z);
@@ -415,19 +415,19 @@ void Object::_BuildMovementUpdate(ByteBuffer * data, uint8 updateFlags) const
             *data << uint32(traveltime);                    // full move time?
             *data << uint32(0);                             // ticks count?
 
-            uint32 poscount = uint32(path.Size());
+            uint32 poscount = uint32(path.size());
             *data << uint32(poscount);                      // points count
 
             for (uint32 i = 0; i < poscount; ++i)
             {
-                *data << float(path.GetNodes()[i].x);
-                *data << float(path.GetNodes()[i].y);
-                *data << float(path.GetNodes()[i].z);
+                *data << path[i].x;
+                *data << path[i].y;
+                *data << path[i].z;
             }
 
-            *data << float(path.GetNodes()[poscount-1].x);
-            *data << float(path.GetNodes()[poscount-1].y);
-            *data << float(path.GetNodes()[poscount-1].z);
+            *data << path[poscount-1].x;
+            *data << path[poscount-1].y;
+            *data << path[poscount-1].z;
         }
     }
 
@@ -1173,6 +1173,17 @@ float WorldObject::GetDistanceZ(const WorldObject* obj) const
     return (dist > 0 ? dist : 0);
 }
 
+float WorldObject::GetDistanceSqr(float x, float y, float z) const
+{
+    float dx = GetPositionX() - x;
+    float dy = GetPositionY() - y;
+    float dz = GetPositionZ() - z;
+    float sizefactor = GetObjectSize();
+    float dist = dx*dx+dy*dy+dz*dz-sizefactor;
+    return (dist > 0 ? dist : 0);
+}
+
+
 bool WorldObject::_IsWithinDist(WorldObject const* obj, float dist2compare, bool is3D) const
 {
     float dx = GetPositionX() - obj->GetPositionX();
@@ -1311,6 +1322,41 @@ float Position::GetAngle(const float x, const float y) const
     return ang;
 }
 
+bool WorldObject::HasInArc(const float arcangle, const float x, const float y) const
+{
+    // always have self in arc
+    if(x == m_positionX && y == m_positionY)
+        return true;
+
+    float arc = arcangle;
+
+    // move arc to range 0.. 2*pi
+    while( arc >= 2.0f * M_PI )
+        arc -=  2.0f * M_PI;
+    while( arc < 0 )
+        arc +=  2.0f * M_PI;
+
+    float angle = GetAngle( x, y );
+    angle -= m_orientation;
+
+    // move angle to range -pi ... +pi
+    while( angle > M_PI)
+        angle -= 2.0f * M_PI;
+    while(angle < -M_PI)
+        angle += 2.0f * M_PI;
+
+    float lborder =  -1 * (arc/2.0f);                       // in range -pi..0
+    float rborder = (arc/2.0f);                             // in range 0..pi
+    return (( angle >= lborder ) && ( angle <= rborder ));
+}
+
+
+bool WorldObject::HasInArc(float arc, const Position *obj) const
+{
+    return this->HasInArc(arc, obj->GetPositionX(), obj->GetPositionY());
+}
+
+
 bool Position::HasInArc(float arc, const Position *obj) const
 {
     // always have self in arc
@@ -1398,6 +1444,101 @@ void WorldObject::MonsterWhisper(const char* text, uint64 receiver, bool IsBossW
 
     player->GetSession()->SendPacket(&data);
 }
+
+float WorldObject::GetGridActivationRange() const
+{
+    if (ToPlayer())
+        return GetMap()->GetVisibilityRange();
+    else if (ToCreature())
+        return ToCreature()->m_SightDistance;
+    else
+        return 0.0f;
+}
+
+float WorldObject::GetVisibilityRange() const
+{
+    if (isActiveObject() && !ToPlayer())
+        return MAX_VISIBILITY_DISTANCE;
+    else
+        return GetMap()->GetVisibilityRange();
+}
+
+float WorldObject::GetSightRange(const WorldObject* target) const
+{
+    if (ToUnit())
+    {
+        if (ToPlayer())
+        {
+            if (target && target->isActiveObject() && !target->ToPlayer())
+                return MAX_VISIBILITY_DISTANCE;
+            else
+                return GetMap()->GetVisibilityRange();
+        }
+        else if (ToCreature())
+            return ToCreature()->m_SightDistance;
+        else
+            return SIGHT_RANGE_UNIT;
+    }
+
+    return 0.0f;
+}
+
+bool WorldObject::canSeeOrDetect(WorldObject const* obj, bool ignoreStealth, bool distanceCheck) const
+{
+    if (this == obj)
+        return true;
+
+    if (!obj->IsInWorld())
+        return false;
+
+    if (GetMap() != obj->GetMap())
+        return false;
+
+    bool corpseCheck = false;
+    bool corpseVisibility = false;
+    if (distanceCheck)
+    {
+        if (const Player* thisPlayer = ToPlayer())
+        {
+            if (thisPlayer->GetVisibility() == 0) // Stop checking other things for GMs
+                return true;
+            if (thisPlayer->isDead() && thisPlayer->GetHealth() > 0) // Cheap way to check for ghost state
+            {
+                if (Corpse* corpse = thisPlayer->GetCorpse())
+                {
+                    corpseCheck = true;
+                    if (corpse->IsWithinDist(thisPlayer, GetSightRange(obj), false))
+                        if (corpse->IsWithinDist(obj, GetSightRange(obj), false))
+                            corpseVisibility = true;
+                }
+            }
+        }
+
+        if (!corpseCheck && !IsWithinDist(obj, GetSightRange(obj), false))
+            return false;
+    }
+
+    // Ghost players, Spirit Healers, and some other NPCs
+    if (!corpseVisibility)
+    {
+        // Alive players can see dead players in some cases, but other objects can't do that
+        if (const Player* thisPlayer = ToPlayer())
+        {
+            if (const Player* objPlayer = obj->ToPlayer())
+            {
+                if (thisPlayer->GetTeam() != objPlayer->GetTeam())
+                    return false;
+            }
+            else
+                return false;
+        }
+        else
+            return false;
+    }
+
+    return true;
+}
+
 
 void WorldObject::SendPlaySound(uint32 Sound, bool OnlySelf)
 {
@@ -1973,53 +2114,50 @@ void WorldObject::MovePosition(Position &pos, float dist, float angle)
 
 void WorldObject::MovePositionToFirstCollision(Position &pos, float dist, float angle)
 {
-        angle += m_orientation;
-        float destx, desty, destz, ground, floor;
- 
-
-        destx = pos.m_positionX + dist * cos(angle);
-        desty = pos.m_positionY + dist * sin(angle);
-        ground = GetMap()->GetHeight(destx, desty, MAX_HEIGHT, true);
-        floor = GetMap()->GetHeight(destx, desty, pos.m_positionZ, true);
-        destz = fabs(ground - pos.m_positionZ) <= fabs(floor - pos.m_positionZ) ? ground : floor;
-
+    angle += m_orientation;
+    float destx, desty, destz, ground, floor;
+    destx = pos.m_positionX + dist * cos(angle);
+    desty = pos.m_positionY + dist * sin(angle);
+    ground = GetMap()->GetHeight(destx, desty, MAX_HEIGHT, true);
+    floor = GetMap()->GetHeight(destx, desty, pos.m_positionZ, true);
+    destz = fabs(ground - pos.m_positionZ) <= fabs(floor - pos.m_positionZ) ? ground : floor;
         bool col = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(GetMapId(),pos.m_positionX,pos.m_positionY,pos.m_positionZ+0.5f,destx,desty,destz+0.5f,destx,desty,destz,-0.5f);
 
-        // collision occured
-        if (col)
-        {
+    // collision occured
+    if (col)
+    {
         // move back a bit
         destx -= CONTACT_DISTANCE * cos(angle);
         desty -= CONTACT_DISTANCE * sin(angle);
         dist = sqrt((pos.m_positionX - destx)*(pos.m_positionX - destx) + (pos.m_positionY - desty)*(pos.m_positionY - desty));
-        }
+    }
 
-        float step = dist/10.0f;
+      float step = dist/10.0f;
 
-        int j = 0;
-        for (j; j < 10; j++)
-        {
+    int j = 0;
+    for (j; j < 10; j++)
+    {
         // do not allow too big z changes
         if (fabs(pos.m_positionZ - destz) > 6)
         {
-                destx -= step * cos(angle);
-                desty -= step * sin(angle);
-                ground = GetMap()->GetHeight(destx, desty, MAX_HEIGHT, true);
-                floor = GetMap()->GetHeight(destx, desty, pos.m_positionZ, true);
-                destz = fabs(ground - pos.m_positionZ) <= fabs(floor - pos.m_positionZ) ? ground : floor;
+            destx -= step * cos(angle);
+            desty -= step * sin(angle);
+            ground = GetMap()->GetHeight(destx, desty, MAX_HEIGHT, true);
+            floor = GetMap()->GetHeight(destx, desty, pos.m_positionZ, true);
+            destz = fabs(ground - pos.m_positionZ) <= fabs(floor - pos.m_positionZ) ? ground : floor;
         }
         // we have correct destz now
         else
         {
-                pos.Relocate(destx, desty, destz);
-                break;
+            pos.Relocate(destx, desty, destz);
+            break;
         }
-        }
+  }
 
-        BlizzLike::NormalizeMapCoord(pos.m_positionX);
-        BlizzLike::NormalizeMapCoord(pos.m_positionY);
-        UpdateGroundPositionZ(pos.m_positionX, pos.m_positionY, pos.m_positionZ);
-        pos.m_orientation = m_orientation;
+    BlizzLike::NormalizeMapCoord(pos.m_positionX);
+    BlizzLike::NormalizeMapCoord(pos.m_positionY);
+    UpdateGroundPositionZ(pos.m_positionX, pos.m_positionY, pos.m_positionZ);
+    pos.m_orientation = m_orientation;
 }
 
 void WorldObject::PlayDistanceSound(uint32 sound_id, Player* target /*= NULL*/)

@@ -7697,3 +7697,73 @@ bool ChatHandler::HandleWarpCommand(const char* args)
     }
     return true;
 }
+
+bool ChatHandler::HandleMmap(const char* args)
+{
+    if (*args)
+    {
+        std::string argstr = (char*)args;
+        if (argstr == "on")
+        {
+            sWorld.setConfig(CONFIG_BOOL_MMAP_ENABLED, true);
+            SendSysMessage("WORLD: mmaps are now ENABLED (individual map settings still in effect)");
+        }
+        else
+        {
+            sWorld.setConfig(CONFIG_BOOL_MMAP_ENABLED, false);
+            SendSysMessage("WORLD: mmaps are now DISABLED");
+        }
+        return true;
+    }
+
+    bool on = sWorld.getConfig(CONFIG_BOOL_MMAP_ENABLED);
+    PSendSysMessage("mmaps are %sabled", on ? "en" : "dis");
+
+    return true;
+}
+
+bool ChatHandler::HandleMmapTestArea(const char* args)
+{
+    float radius = 40.0f;
+
+    if (*args)
+        radius = (float)atof((char*)args);
+
+    CellPair pair(BlizzLike::ComputeCellPair( m_session->GetPlayer()->GetPositionX(), m_session->GetPlayer()->GetPositionY()) );
+    Cell cell(pair);
+    cell.SetNoCreate();
+
+    std::list<Creature*> creatureList;
+
+    BlizzLike::AnyUnitInObjectRangeCheck go_check(m_session->GetPlayer(), radius);
+    BlizzLike::CreatureListSearcher<BlizzLike::AnyUnitInObjectRangeCheck> go_search(creatureList, go_check);
+    TypeContainerVisitor<BlizzLike::CreatureListSearcher<BlizzLike::AnyUnitInObjectRangeCheck>, GridTypeMapContainer> go_visit(go_search);
+
+    // Get Creatures
+    cell.Visit(pair, go_visit, *(m_session->GetPlayer()->GetMap()), *(m_session->GetPlayer()), radius);
+
+    if (!creatureList.empty())
+    {
+        PSendSysMessage("Found %i Creatures.", creatureList.size());
+
+        uint32 paths = 0;
+        uint32 uStartTime = getMSTime();
+
+        float gx,gy,gz;
+        m_session->GetPlayer()->GetPosition(gx,gy,gz);
+        for (std::list<Creature*>::iterator itr = creatureList.begin(); itr != creatureList.end(); ++itr)
+        {
+            PathInfo((*itr), gx, gy, gz);
+            ++paths;
+        }
+
+        uint32 uPathLoadTime = getMSTimeDiff(uStartTime, getMSTime());
+        PSendSysMessage("Generated %i paths in %i ms", paths, uPathLoadTime);
+    }
+    else
+    {
+        PSendSysMessage("No creatures in %f yard range.", radius);
+    }
+
+    return true;
+}
