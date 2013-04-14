@@ -245,7 +245,7 @@ void GameObject::Update(uint32 diff)
                             Unit* caster = GetOwner();
                             if (caster && caster->GetTypeId() == TYPEID_PLAYER)
                             {
-                                caster->FinishSpell(CURRENT_CHANNELED_SPELL);
+                                caster->ToPlayer()->RemoveGameObject(this, true);
 
                                 WorldPacket data(SMSG_FISH_NOT_HOOKED,0);
                                 caster->ToPlayer()->GetSession()->SendPacket(&data);
