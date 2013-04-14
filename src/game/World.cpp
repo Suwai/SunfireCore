@@ -1124,6 +1124,10 @@ void World::LoadConfigSettings(bool reload)
 // Initialize the World
 void World::SetInitialWorldSettings()
 {
+	// mmaps
+    m_configs[CONFIG_BOOL_MMAP_ENABLED] = sConfig.GetBoolDefault("mmap.enable", true);
+    std::string ignoreMMapIds = sConfig.GetStringDefault("mmap.ignoreMapIds", "");
+
     // Initialize the random number generator
     srand((unsigned int)time(NULL));
 
