@@ -60,6 +60,11 @@ struct boss_maiden_of_virtueAI : public ScriptedAI
         Holyground_Timer    = 3000;
         Enrage_Timer        = 600000;
 
+		me->ApplySpellImmune(0, IMMUNITY_STATE, SPELL_AURA_MOD_TAUNT, true);
+		me->ApplySpellImmune(0, IMMUNITY_EFFECT, SPELL_EFFECT_ATTACK_ME, true);
+		me->ApplySpellImmune(0, IMMUNITY_EFFECT , SPELL_EFFECT_INTERRUPT_CAST, true);
+        me->ApplySpellImmune(0, IMMUNITY_MECHANIC, MECHANIC_INTERRUPT, true);
+
         Enraged = false;
     }
 
