@@ -47,7 +47,7 @@ EndScriptData */
 #define SPELL_IMMUNE        6724
 
 //Creature Spells
-#define SPELL_CIRCULAR_BLIZZARD     29952                   //29952 is the REAL circular blizzard that leaves persistant blizzards that last for 10 seconds
+#define SPELL_CIRCULAR_BLIZZARD     29969                 //29952 is the REAL circular blizzard that leaves persistant blizzards that last for 10 seconds
 #define SPELL_WATERBOLT             31012
 #define SPELL_SHADOW_PYRO           29978
 
@@ -180,7 +180,7 @@ struct boss_aranAI : public ScriptedAI
             return;
 
         //store the threat list in a different container
-        for(std::list<HostileReference *>::iterator itr = t_list.begin(); itr!= t_list.end(); ++itr)
+        for (std::list<HostileReference *>::const_iterator itr = t_list.begin(); itr!= t_list.end(); ++itr)
         {
             Unit *pTarget = Unit::GetUnit(*me, (*itr)->getUnitGuid());
             //only on alive players
@@ -201,7 +201,7 @@ struct boss_aranAI : public ScriptedAI
                 FWTargPosX[i] = (*itr)->GetPositionX();
                 FWTargPosY[i] = (*itr)->GetPositionY();
                 DoCast((*itr), SPELL_FLAME_WREATH, true);
-                i++;
+                ++i;
             }
         }
     }
@@ -248,7 +248,7 @@ struct boss_aranAI : public ScriptedAI
         if (!Drinking && me->GetMaxPower(POWER_MANA) && (me->GetPower(POWER_MANA)*100 / me->GetMaxPower(POWER_MANA)) < 20)
         {
             Drinking = true;
-            me->InterruptNonMeleeSpells(false);
+            me->InterruptNonMeleeSpells(true);
 
             DoScriptText(SAY_DRINK, me);
 
@@ -428,11 +428,14 @@ struct boss_aranAI : public ScriptedAI
 					DoScriptText(RAND(SAY_BLIZZARD1,SAY_BLIZZARD2), me);
 
                     Creature* Spawn = NULL;
-                    Spawn = DoSpawnCreature(CREATURE_ARAN_BLIZZARD, 0, 0, 0, 0, TEMPSUMMON_TIMED_DESPAWN, 25000);
+                    Spawn = DoSpawnCreature(CREATURE_ARAN_BLIZZARD, 0, 0, 0, 0, TEMPSUMMON_TIMED_DESPAWN, 30000);
                     if (Spawn)
                     {
-                        Spawn->setFaction(me->getFaction());
-                        Spawn->CastSpell(Spawn, SPELL_CIRCULAR_BLIZZARD, false);
+						Spawn->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+						Spawn->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+                        Spawn->CastSpell(Spawn, SPELL_CIRCULAR_BLIZZARD, true);
+						Spawn->SetReactState(REACT_PASSIVE);
+						Spawn->GetMotionMaster()->MoveRotate(30000, rand()%2 ? ROTATE_DIRECTION_LEFT : ROTATE_DIRECTION_RIGHT);
                     }
                     break;
             }
@@ -497,11 +500,11 @@ struct boss_aranAI : public ScriptedAI
         //Flame Wreath check
         if (FlameWreathTimer)
         {
-            if (FlameWreathCheckTime <= diff)
+            if (FlameWreathTimer >= diff)
                 FlameWreathTimer -= diff;
             else FlameWreathTimer = 0;
 
-            if (FlameWreathCheckTime < diff)
+            if (FlameWreathCheckTime <= diff)
             {
                 for (uint8 i = 0; i < 3; ++i)
                 {

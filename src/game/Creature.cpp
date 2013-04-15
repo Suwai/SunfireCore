@@ -248,6 +248,7 @@ void Creature::RemoveCorpse(bool setSpawnTime)
     GetMap()->CreatureRelocation(this,x,y,z,o);
 }
 
+
 /**
  * change the entry of creature until respawn
  */
