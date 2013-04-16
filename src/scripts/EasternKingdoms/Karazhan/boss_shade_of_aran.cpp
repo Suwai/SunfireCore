@@ -47,7 +47,7 @@ EndScriptData */
 #define SPELL_IMMUNE        6724
 
 //Creature Spells
-#define SPELL_CIRCULAR_BLIZZARD     29969                 //29952 is the REAL circular blizzard that leaves persistant blizzards that last for 10 seconds
+#define SPELL_CIRCULAR_BLIZZARD     29969                //29952 is the REAL circular blizzard that leaves persistant blizzards that last for 10 seconds
 #define SPELL_WATERBOLT             31012
 #define SPELL_SHADOW_PYRO           29978
 
@@ -249,6 +249,7 @@ struct boss_aranAI : public ScriptedAI
         {
             Drinking = true;
             me->InterruptNonMeleeSpells(true);
+			me->AttackStop();
 
             DoScriptText(SAY_DRINK, me);
 
@@ -427,15 +428,14 @@ struct boss_aranAI : public ScriptedAI
 
 					DoScriptText(RAND(SAY_BLIZZARD1,SAY_BLIZZARD2), me);
 
-                    Creature* Spawn = NULL;
+					Creature* Spawn = NULL;
                     Spawn = DoSpawnCreature(CREATURE_ARAN_BLIZZARD, 0, 0, 0, 0, TEMPSUMMON_TIMED_DESPAWN, 30000);
                     if (Spawn)
                     {
-						Spawn->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-						Spawn->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-                        Spawn->CastSpell(Spawn, SPELL_CIRCULAR_BLIZZARD, true);
-						Spawn->SetReactState(REACT_PASSIVE);
-						Spawn->GetMotionMaster()->MoveRotate(30000, rand()%2 ? ROTATE_DIRECTION_LEFT : ROTATE_DIRECTION_RIGHT);
+					Spawn->setFaction(me->getFaction());
+					Spawn->SetReactState(REACT_PASSIVE);
+					Spawn->CastSpell(me, SPELL_CIRCULAR_BLIZZARD, true);
+					Spawn->GetMotionMaster()->MoveRotate(30000, rand()%2 ? ROTATE_DIRECTION_LEFT : ROTATE_DIRECTION_RIGHT);
                     }
                     break;
             }
@@ -579,7 +579,7 @@ struct water_elementalAI : public ScriptedAI
 
     void UpdateAI(const uint32 diff)
     {
-        if (!UpdateVictim() )
+        if (!UpdateVictim())
             return;
 
         if (CastTimer <= diff)
@@ -589,6 +589,26 @@ struct water_elementalAI : public ScriptedAI
         }else CastTimer -= diff;
     }
 };
+struct npc_shade_of_aran_blizzardAI : public ScriptedAI
+{
+	npc_shade_of_aran_blizzardAI(Creature *c) : ScriptedAI(c) {}
+
+
+    void Reset()
+	{ }
+    void MoveInLineOfSight(Unit* /*pWho*/)
+	{ }
+    void AttackStart(Unit* /*pWho*/)
+	{ }
+    void UpdateAI(const uint32 /*uiDiff*/)
+	{ }
+};
+
+CreatureAI* GetAI_npc_shade_of_aran_blizzard(Creature* pCreature)
+{
+    return new npc_shade_of_aran_blizzardAI(pCreature);
+}
+
 
 CreatureAI* GetAI_boss_aran(Creature* pCreature)
 {
@@ -611,6 +631,11 @@ void AddSC_boss_shade_of_aran()
     newscript = new Script;
     newscript->Name = "mob_aran_elemental";
     newscript->GetAI = &GetAI_water_elemental;
+    newscript->RegisterSelf();
+
+	newscript = new Script;
+    newscript->Name = "npc_shade_of_aran_blizzard";
+    newscript->GetAI = &GetAI_npc_shade_of_aran_blizzard;
     newscript->RegisterSelf();
 }
 
