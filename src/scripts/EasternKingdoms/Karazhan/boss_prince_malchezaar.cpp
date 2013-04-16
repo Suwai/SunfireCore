@@ -465,7 +465,7 @@ struct boss_malchezaarAI : public ScriptedAI
                             axe->AI()->AttackStart(pTarget);
                             //axe->getThreatManager().tauntApply(pTarget); //Taunt Apply and fade out does not work properly
                                                             // So we'll use a hack to add a lot of threat to our target
-                            axe->AddThreat(pTarget, 1000000.0f);
+                            axe->AddThreat(pTarget, 10000.0f);
                         }
                     }
                 }
@@ -487,7 +487,8 @@ struct boss_malchezaarAI : public ScriptedAI
         {
             if(AxesTargetSwitchTimer < diff)
             {
-                AxesTargetSwitchTimer = 7500 + rand()%12500 ;
+				DoResetThreat();
+                AxesTargetSwitchTimer = 5000 + rand()%12000 ;
 
                 Unit *target = SelectUnit(SELECT_TARGET_RANDOM, 0);
                 if(target)
@@ -497,16 +498,12 @@ struct boss_malchezaarAI : public ScriptedAI
                         Unit *axe = Unit::GetUnit(*me, axes[i]);
                         if(axe)
                         {
-                            float threat = 1000000.0f;
+                            float threat = 10000.0f;
                             if(axe->getVictim() && DoGetThreat(axe->getVictim()))
                             {
-                                threat = axe->getThreatManager().getThreat(axe->getVictim());
-                                axe->getThreatManager().modifyThreatPercent(axe->getVictim(), -100);
                             }
                             if(target)
                                 axe->AddThreat(target, threat);
-                            //axe->getThreatManager().tauntFadeOut(axe->getVictim());
-                            //axe->getThreatManager().tauntApply(target);
                         }
                     }
                 }
