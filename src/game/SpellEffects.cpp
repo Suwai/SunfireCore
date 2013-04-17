@@ -255,6 +255,49 @@ void Spell::EffectInstaKill(SpellEffIndex /*effIndex*/)
             default:
                 sLog.outError("EffectInstaKill: Unhandled creature entry (%u) case.", entry);
                 return;
+				switch(m_spellInfo->Id)                     // better way to check unknown
+               {
+                    // Positive/Negative Charge
+                    case 28062:
+                    case 28085:
+                    case 39090:
+                    case 39093:
+                        if (!m_triggeredByAuraSpell)
+                            break;
+                        if (unitTarget == m_caster)
+                        {
+                            uint8 count = 0;
+                            for (std::list<TargetInfo>::iterator ihit = m_UniqueTargetInfo.begin(); ihit != m_UniqueTargetInfo.end(); ++ihit)
+                                if (ihit->targetGUID != m_caster->GetGUID())
+                                    if (Player* target = ObjectAccessor::GetPlayer(*m_caster, ihit->targetGUID))
+                                        if (target->HasAura(m_triggeredByAuraSpell->Id, true))
+                                            ++count;
+                            if (count)
+                            {
+                                uint32 spellId = 0;
+                                switch (m_spellInfo->Id)
+                                {
+                                    case 28062: spellId = 29659; break;
+                                    case 28085: spellId = 29660; break;
+                                    case 39090: spellId = 39089; break;
+                                    case 39093: spellId = 39092; break;
+                                }
+                                Aura *aur = m_caster->GetAura(spellId, spellId);
+
+                                if(!aur)
+                                {
+                                    m_caster->CastSpell(m_caster, spellId, false);
+                                    aur = m_caster->GetAura(spellId, spellId);
+                                }
+                                if(aur)
+                                    aur->SetStackAmount(count);
+
+                        if (m_caster->HasAura(m_triggeredByAuraSpell->Id, true))
+                            damage = 0;
+							}
+						}
+                        break;
+				}
         }
 
         m_caster->CastSpell(m_caster, spellID, true);
@@ -1174,7 +1217,7 @@ void Spell::EffectDummy(SpellEffIndex effIndex)
                     return;
                 }
                 case 28089:                                 // Polarity Shift
-                    if (unitTarget)
+                    if (unitTarget && unitTarget->GetTypeId() == TYPEID_PLAYER)
                         unitTarget->CastSpell(unitTarget, roll_chance_i(50) ? 28059 : 28084, true, NULL, NULL, m_caster->GetGUID());
                     break;
                 case 28730:                                 // Arcane Torrent (Mana)
@@ -1188,10 +1231,20 @@ void Spell::EffectDummy(SpellEffIndex effIndex)
                     }
                     return;
                 }
-                case 39096:                                 // Polarity Shift
-                    if (unitTarget)
-                        unitTarget->CastSpell(unitTarget, roll_chance_i(50) ? 39088 : 39091, true, NULL, NULL, m_caster->GetGUID());
-                    break;
+
+				case 39096:                                 // Polarity Shift (Mechanar)
+                
+                     if (unitTarget && unitTarget->GetTypeId() == TYPEID_PLAYER)
+
+                    // neutralize the target
+                    if (unitTarget->HasAura(28059, true)) unitTarget->RemoveAurasDueToSpell(28059);
+                    if (unitTarget->HasAura(29659, true)) unitTarget->RemoveAurasDueToSpell(29659);
+                    if (unitTarget->HasAura(28084, true)) unitTarget->RemoveAurasDueToSpell(28084);
+                    if (unitTarget->HasAura(29660, true)) unitTarget->RemoveAurasDueToSpell(29660);
+
+                    unitTarget->CastSpell(unitTarget, roll_chance_i(50) ? 28059 : 28084, true, 0, 0, m_caster->GetGUID());
+					break;
+				
                 case 29200:                                 // Purify Helboar Meat
                 {
                     if (m_caster->GetTypeId() != TYPEID_PLAYER)

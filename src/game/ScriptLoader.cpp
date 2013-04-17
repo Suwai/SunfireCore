@@ -74,6 +74,7 @@ void AddSC_boss_attumen();                   //Karazhan
 void AddSC_boss_curator();
 void AddSC_boss_maiden_of_virtue();
 void AddSC_boss_shade_of_aran();
+//void AddSC_chess_event();
 void AddSC_boss_malchezaar();
 void AddSC_boss_terestian_illhoof();
 void AddSC_boss_moroes();
@@ -357,6 +358,7 @@ void AddSC_boss_high_astromancer_solarian();
 void AddSC_instance_the_eye();
 void AddSC_the_eye();
 void AddSC_boss_gatewatcher_iron_hand();     //TK The Mechanar
+void AddSC_boss_mechano_lord_capacitus();
 void AddSC_boss_nethermancer_sepethrea();
 void AddSC_boss_pathaleon_the_calculator();
 void AddSC_instance_mechanar();
@@ -444,6 +446,7 @@ void AddScripts()
     AddSC_boss_curator();
     AddSC_boss_maiden_of_virtue();
     AddSC_boss_shade_of_aran();
+	//AddSC_chess_event();
     AddSC_boss_malchezaar();
     AddSC_boss_terestian_illhoof();
     AddSC_boss_moroes();
@@ -725,6 +728,7 @@ void AddScripts()
     AddSC_instance_the_eye();
     AddSC_the_eye();
     AddSC_boss_gatewatcher_iron_hand();     //TK The Mechanar
+    AddSC_boss_mechano_lord_capacitus();
     AddSC_boss_nethermancer_sepethrea();
     AddSC_boss_pathaleon_the_calculator();
     AddSC_instance_mechanar();

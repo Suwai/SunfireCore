@@ -266,7 +266,7 @@ struct boss_terestianAI : public ScriptedAI
                     me->RemoveAurasDueToSpell(SPELL_BROKEN_PACT);
                 }
 
-                DoCast(me, SPELL_SUMMON_IMP, false);
+                else DoCast(me, SPELL_SUMMON_IMP, true);
             }
 
             if(!Kilrek || !Kilrek->isDead())

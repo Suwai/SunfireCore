@@ -673,6 +673,10 @@ bool IsPositiveEffect(uint32 spellId, uint32 effIndex)
                         case 38637:                         // Nether Exhaustion (red)
                         case 38638:                         // Nether Exhaustion (green)
                         case 38639:                         // Nether Exhaustion (blue)
+						case 28059:
+						case 29659:
+						case 28084:
+						case 29660: 
                             return false;
                         default:
                             break;

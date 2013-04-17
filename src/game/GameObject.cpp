@@ -468,6 +468,7 @@ void GameObject::Update(uint32 diff)
 }
 
 
+
 void GameObject::Refresh()
 {
     // not refresh despawned not casted GO (despawned casted GO destroyed in all cases anyway)
@@ -1246,14 +1247,14 @@ void GameObject::Use(Unit* user)
             AddUse();
             break;
         }
-        case GAMEOBJECT_TYPE_MEETINGSTONE:                  //23
+        case GAMEOBJECT_TYPE_MEETINGSTONE:                  // 23
         {
             GameObjectInfo const* info = GetGOInfo();
 
             if (user->GetTypeId() != TYPEID_PLAYER)
                 return;
 
-            Player* player = user->ToPlayer();
+            Player* player = (Player*)user;
 
             Player* targetPlayer = ObjectAccessor::FindPlayer(player->GetSelection());
 
@@ -1261,15 +1262,19 @@ void GameObject::Use(Unit* user)
             if (!targetPlayer || targetPlayer == player || !targetPlayer->IsInSameGroupWith(player))
                 return;
 
-            //required lvl checks!
+            // required lvl checks!
             uint8 level = player->getLevel();
             if (level < info->meetingstone.minLevel || level > info->meetingstone.maxLevel)
                 return;
+
             level = targetPlayer->getLevel();
             if (level < info->meetingstone.minLevel || level > info->meetingstone.maxLevel)
                 return;
 
-            spellId = 23598;
+            if (info->id == 194097)
+                spellId = 61994;                            // Ritual of Summoning
+            else
+                spellId = 59782;                            // Summoning Stone Effect
 
             break;
         }

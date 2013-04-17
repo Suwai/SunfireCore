@@ -6,5 +6,7 @@
 #define DEF_MECHANAR_H
 
 #define DATA_NETHERMANCER_EVENT 1
+#define DATA_MECHANOLORD_CAPACITUS
+
 #endif
 
