@@ -174,7 +174,7 @@ struct boss_terestianAI : public ScriptedAI
             }
         }
 
-        CheckKilrekTimer    = 60000;
+        CheckKilrekTimer    = 30000;
         SacrificeTimer      = 30000;
         ShadowboltTimer     =  5000;
         SummonTimer         = 10000;
@@ -247,7 +247,6 @@ struct boss_terestianAI : public ScriptedAI
     {
         if(!UpdateVictim())
             return;
-
         if(CheckKilrekTimer < diff)
         {
 
@@ -273,7 +272,7 @@ struct boss_terestianAI : public ScriptedAI
             if(!Kilrek || !Kilrek->isDead())
             {
                 DoCast(me, SPELL_SUMMON_IMP, true);
-                CheckKilrekTimer = 45000;
+                CheckKilrekTimer = 40000;
             }
         }else CheckKilrekTimer -= diff;
 
@@ -284,7 +283,7 @@ struct boss_terestianAI : public ScriptedAI
             if(target && target->isAlive() && target->GetTypeId() == TYPEID_PLAYER)
             {
                 DoCast(target, SPELL_SACRIFICE, true);
-                Creature* Chains = me->SummonCreature(CREATURE_DEMONCHAINS, -11231.632813, -1693.411743, 179.236862, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 21000);
+                Creature* Chains = me->SummonCreature(CREATURE_DEMONCHAINS, -111150.991211, -1635.907837, 278.239044, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 21000);
                 if(Chains)
                 {
                     ((mob_demon_chainAI*)Chains->AI())->SacrificeGUID = target->GetGUID();

@@ -30,6 +30,7 @@ EndScriptData */
 #define EMOTE_PHASE_PORTAL          -1532089
 #define EMOTE_PHASE_BANISH          -1532090
 
+#define DUST_COVERED_CHEST			185119
 #define SPELL_NETHERBURN_AURA       30522
 #define SPELL_VOIDZONE              30539
 #define SPELL_NETHER_INFUSION       38688
@@ -255,6 +256,8 @@ struct boss_netherspiteAI : public ScriptedAI
     {
         HandleDoors(true);
         DestroyPortals();
+
+		me->SummonGameObject(DUST_COVERED_CHEST,-11150,-1635,278,2.24,0,0,0,0,7200000);
     }
 
     void UpdateAI(const uint32 diff)
