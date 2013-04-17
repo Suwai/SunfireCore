@@ -595,7 +595,9 @@ struct npc_shade_of_aran_blizzardAI : public ScriptedAI
 
 
     void Reset()
-	{ }
+	{       me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+	}
     void MoveInLineOfSight(Unit* /*pWho*/)
 	{ }
     void AttackStart(Unit* /*pWho*/)

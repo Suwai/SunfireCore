@@ -164,17 +164,19 @@ struct mob_ragin_flamesAI : public ScriptedAI
     uint32 inferno_Timer;
     uint32 flame_timer;
     uint32 Check_Timer;
+	uint32 Switch_Timer;
 
-    bool onlyonce;
 
     void Reset()
     {
         inferno_Timer = 10000;
         flame_timer = 500;
         Check_Timer = 2000;
-        onlyonce = false;
+        Switch_Timer = 4000;
         me->ApplySpellImmune(0, IMMUNITY_DAMAGE, SPELL_SCHOOL_MASK_MAGIC, true);
         me->ApplySpellImmune(0, IMMUNITY_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, true);
+		me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
         me->SetSpeed(MOVE_RUN, HeroicMode ? 0.7f : 0.5f);
     }
 
@@ -202,17 +204,18 @@ struct mob_ragin_flamesAI : public ScriptedAI
         if (!UpdateVictim())
             return;
 
-        if (!onlyonce)
+        if (Switch_Timer <= diff)
         {
-            if (Unit* pTarget = SelectUnit(SELECT_TARGET_RANDOM,0))
-                me->GetMotionMaster()->MoveChase(pTarget);
-            onlyonce = true;
-        }
+            if (Unit* pTarget = SelectUnit(SELECT_TARGET_RANDOM, 0))
+				me->GetMotionMaster()->MoveChase(pTarget);
+				Switch_Timer = 15000;
+        } else Switch_Timer -= diff;
 
         if (inferno_Timer <= diff)
         {
+			me->GetMotionMaster()->Clear(false);
             DoCast(me->getVictim(),HeroicMode ? H_SPELL_INFERNO : SPELL_INFERNO);
-            me->TauntApply(me->getVictim());
+			DoResetThreat();
             inferno_Timer = 10000;
         } else inferno_Timer -= diff;
 
