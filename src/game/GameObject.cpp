@@ -1270,15 +1270,11 @@ void GameObject::Use(Unit* user)
             level = targetPlayer->getLevel();
             if (level < info->meetingstone.minLevel || level > info->meetingstone.maxLevel)
                 return;
-
-            if (info->id == 194097)
-                spellId = 61994;                            // Ritual of Summoning
-            else
-                spellId = 59782;                            // Summoning Stone Effect
+			
+			spellId = 23598;
 
             break;
         }
-
         case GAMEOBJECT_TYPE_FLAGSTAND:                     // 24
         {
             if (user->GetTypeId() != TYPEID_PLAYER)
