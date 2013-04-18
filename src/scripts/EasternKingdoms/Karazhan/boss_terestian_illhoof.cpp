@@ -280,19 +280,16 @@ struct boss_terestianAI : public ScriptedAI
         if(SacrificeTimer < diff)
         {
             Unit* target = SelectUnit(SELECT_TARGET_RANDOM, 1);
-            if(target && target->isAlive() && target->GetTypeId() == TYPEID_PLAYER)
+            if (target && target->isAlive())
             {
                 DoCast(target, SPELL_SACRIFICE, true);
                 Creature* Chains = me->SummonCreature(CREATURE_DEMONCHAINS, -111150.991211, -1635.907837, 278.239044, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 21000);
+
                 if(Chains)
                 {
-                    ((mob_demon_chainAI*)Chains->AI())->SacrificeGUID = target->GetGUID();
+                    CAST_AI(mob_demon_chainAI, Chains->AI())->SacrificeGUID = target->GetGUID();
                     Chains->CastSpell(Chains, SPELL_DEMON_CHAINS, true);
-                    switch(rand()%2)
-                    {
-                    case 0: DoScriptText(SAY_SACRIFICE1, me); break;
-                    case 1: DoScriptText(SAY_SACRIFICE2, me); break;
-                    }
+                    DoScriptText(RAND(SAY_SACRIFICE1,SAY_SACRIFICE2), me);
                     SacrificeTimer = 30000;
                 }
             }
