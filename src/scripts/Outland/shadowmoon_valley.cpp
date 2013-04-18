@@ -1732,10 +1732,94 @@ struct npc_jovaanAI : public ScriptedAI
     }
 };
 
-CreatureAI* GetAI_npc_jovaan(Creature* pCreature)
-{
+	CreatureAI* GetAI_npc_jovaan(Creature* pCreature)
+	{
     return new npc_jovaanAI(pCreature);
-}
+	}
+
+enum ShadowMoonTuberEnum
+{
+    SPELL_WHISTLE               = 36652,
+    SPELL_SHADOWMOON_TUBER      = 36462,
+
+    NPC_BOAR_ENTRY              = 21195,
+    GO_SHADOWMOON_TUBER_MOUND   = 184701,
+
+    POINT_TUBER                 = 1,
+    TYPE_BOAR                   = 1,
+    DATA_BOAR                   = 1
+};
+
+struct npc_shadowmoon_tuber_nodeAI : public ScriptedAI
+    {
+        npc_shadowmoon_tuber_nodeAI(Creature* creature) : ScriptedAI(creature) {}
+
+        void Reset()
+        {
+            tapped = false;
+            tuberGUID = 0;
+            resetTimer = 60000;
+        }
+
+        void SetData(uint32 id, uint32 data)
+        {
+            if (id == TYPE_BOAR && data == DATA_BOAR)
+            {
+                // Spawn chest GO
+                DoCast(SPELL_SHADOWMOON_TUBER);
+
+                // Despawn the tuber
+                if (GameObject* tuber = me->FindNearestGameObject(GO_SHADOWMOON_TUBER_MOUND, 5.0f))
+                {
+                    tuberGUID = tuber->GetGUID();
+                    // @Workaround: find how to properly despawn the GO
+                    tuber->SetWorldObject(GO_JUST_DEACTIVATED);
+                }
+            }
+        }
+
+        void SpellHit(Unit* /*caster*/, const SpellEntry* spell)
+        {
+            if (!tapped && spell->Id == SPELL_WHISTLE)
+            {
+                if (Creature* boar = me->FindNearestCreature(NPC_BOAR_ENTRY, 30.0f))
+                {
+                    // Disable trigger and force nearest boar to walk to him
+                    tapped = true;
+                    boar->RemoveUnitMovementFlag(MOVEFLAG_WALK_MODE);
+                    boar->GetMotionMaster()->MovePoint(POINT_TUBER, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ());
+                }
+            }
+        }
+
+        void UpdateAI(const uint32 diff)
+        {
+            if (tapped)
+            {
+                if (resetTimer <= diff)
+                {
+                    // Respawn the tuber
+                    if (tuberGUID)
+                        if (GameObject* tuber = GameObject::GetGameObject(*me, tuberGUID))
+                        // @Workaround: find how to properly respawn the GO
+                            tuber->SetGoState(GO_STATE_ACTIVE);
+
+                    Reset();
+                }
+                else
+                    resetTimer -= diff;
+            }
+        }
+    private:
+        bool tapped;
+        uint64 tuberGUID;
+        uint32 resetTimer;
+    };
+CreatureAI* GetAInpc_shadowmoon_tuber_node(Creature* creature)
+    {
+        return new npc_shadowmoon_tuber_nodeAI(creature);
+    }
+
 
 void AddSC_shadowmoon_valley()
 {
@@ -1826,6 +1910,11 @@ void AddSC_shadowmoon_valley()
     newscript = new Script;
     newscript->Name = "npc_jovaan";
     newscript->GetAI = &GetAI_npc_jovaan;
+    newscript->RegisterSelf();
+
+	newscript = new Script;
+    newscript->Name = "npc_shadowmoon_tuber_node";
+    newscript->GetAI = &GetAInpc_shadowmoon_tuber_node;
     newscript->RegisterSelf();
 }
 
