@@ -283,7 +283,7 @@ struct boss_terestianAI : public ScriptedAI
             if (target && target->isAlive())
             {
                 DoCast(target, SPELL_SACRIFICE, true);
-                Creature* Chains = me->SummonCreature(CREATURE_DEMONCHAINS, -111150.991211, -1635.907837, 278.239044, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 21000);
+                Creature* Chains = me->SummonCreature(CREATURE_DEMONCHAINS, -11234.077148, -1698.314209, 179.237320, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 21000);
 
                 if(Chains)
                 {
