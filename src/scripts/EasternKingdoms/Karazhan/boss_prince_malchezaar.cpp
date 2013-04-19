@@ -487,7 +487,7 @@ struct boss_malchezaarAI : public ScriptedAI
         {
 		if (AxesTargetSwitchTimer <= diff)
             {
-                AxesTargetSwitchTimer = urand(5500, 12000);
+                AxesTargetSwitchTimer = urand(4500, 9000);
 
                 if (Unit *pTarget = SelectTarget(SELECT_TARGET_RANDOM, 0, 100, true))
                 {
