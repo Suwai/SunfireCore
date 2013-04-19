@@ -485,25 +485,20 @@ struct boss_malchezaarAI : public ScriptedAI
         }
         else
         {
-            if(AxesTargetSwitchTimer < diff)
+		if (AxesTargetSwitchTimer <= diff)
             {
-				DoResetThreat();
-                AxesTargetSwitchTimer = 5000 + rand()%12000 ;
+                AxesTargetSwitchTimer = urand(5500, 12000);
 
-                Unit *target = SelectUnit(SELECT_TARGET_RANDOM, 0);
-                if(target)
+                if (Unit *pTarget = SelectTarget(SELECT_TARGET_RANDOM, 0, 100, true))
                 {
-                    for(int i = 0; i < 2; ++i)
+                    for (uint8 i = 0; i < 2; ++i)
                     {
-                        Unit *axe = Unit::GetUnit(*me, axes[i]);
-                        if(axe)
+                        if (Unit *axe = Unit::GetUnit(*me, axes[i]))
                         {
-                            float threat = 10000.0f;
-                            if(axe->getVictim() && DoGetThreat(axe->getVictim()))
-                            {
-                            }
-                            if(target)
-                                axe->AddThreat(target, threat);
+                            if (axe->getVictim())
+                                DoModifyThreatPercent(axe->getVictim(), -100);
+                            if (pTarget)
+                                axe->AddThreat(pTarget, 10000.0f);
                         }
                     }
                 }
